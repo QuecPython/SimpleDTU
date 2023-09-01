@@ -42,14 +42,14 @@ class Dtu(object):
         logger.info('Dtu run successfully!')
 
     def download_thread_worker(self):
-        print('dtu start download thread: {}'.format(self.download_thread))
+        logger.info('dtu start download thread: {}'.format(self.download_thread))
         while True:
             payload = self.cloud.recv()
             logger.info('down transfer msg: {}'.format(payload))
             self.serial.write(payload['data'])
 
     def upload_thread_worker(self):
-        print('dtu start upload thread: {}'.format(self.upload_thread))
+        logger.info('dtu start upload thread: {}'.format(self.upload_thread))
         while True:
             data = self.serial.read(1024)
             logger.info('up transfer msg: {}'.format(data))

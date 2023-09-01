@@ -72,8 +72,16 @@ class MqttIot(object):
                 return False
             else:
                 logger.info('mqtt connect successfully.')
-        self.__recv_thread.start()
+                self.__recv_thread.start()
         return True
+
+    def deinit(self):
+        try:
+            self.__reconnect_thread.stop()
+            self.__recv_thread.stop()
+            self.__disconnect()
+        except Exception as e:
+            logger.warn('MqttIot deinit error: {}'.format(e))
 
     def __callback(self, topic, data):
         self.__queue.put({'topic': topic, 'data': data})
@@ -112,7 +120,6 @@ class MqttIot(object):
             is_ok = False
 
         if not is_ok:
-            logger.info('send failed, try reconnecting.')
             with self.__reconnect_lock:
                 # try to start reconnect thread.
                 # if the thread is running, we do nothing.(`start` method will check running status.)

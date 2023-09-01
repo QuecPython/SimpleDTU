@@ -1,6 +1,6 @@
 {
     "SYSTEM": {
-        "CLOUD": "MQTT"
+        "CLOUD": "SOCKET"
     },
     "PARAMS": {
         "MQTT": {
@@ -16,8 +16,8 @@
             "publish": "/public/TEST/test"
         },
         "SOCKET": {
-            "host": "webtcp.tongxinmao.com",
-            "port": 10002,
+            "host": "v5.idcfengye.com",
+            "port": 10033,
             "timeout": 5,
             "protocol": "TCP"
         }

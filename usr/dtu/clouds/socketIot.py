@@ -1,5 +1,6 @@
+import utime
 import usocket
-from usr.dtu.common import Thread, Queue
+from usr.dtu.common import Thread, Queue, Condition, Lock
 from usr.dtu.logging import getLogger
 
 
@@ -48,7 +49,7 @@ class Socket(object):
     def disconnect(self):
         if self.__sock:
             self.__sock.close()
-            print('{} disconnect.'.format(self))
+            logger.info('{} disconnect.'.format(self))
             self.__sock = None
 
     def is_status_ok(self):
@@ -71,6 +72,7 @@ class Socket(object):
 
 
 class SocketIot(object):
+    RECONNECT_INTERVAL = 10
 
     def __init__(self, host, port, timeout=5, protocol='TCP'):
         self.__host = host
@@ -79,25 +81,47 @@ class SocketIot(object):
         self.__protocol = protocol
 
         self.__sock = None
-        self.__recv_thread = Thread(target=self.__recv_thread_worker)
         self.__queue = Queue()
+        self.__recv_thread = Thread(target=self.__recv_thread_worker)
+        self.__reconnect_thread = Thread(target=self.__reconnect_thread_worker)
+        self.__reconnect_lock = Lock()
+        self.__ready = Condition()
+
+    def __connect(self):
+        self.__sock = Socket(self.__host, self.__port, self.__timeout, self.__protocol)
+        self.__sock.connect()
+
+    def __disconnect(self):
+        if self.__sock:
+            self.__sock.disconnect()
+            self.__sock = None
 
     def init(self):
-        if self.__sock is None:
-            self.__sock = Socket(
-                self.__host,
-                self.__port,
-                self.__timeout,
-                self.__protocol
-            )
-        else:
-            if self.__sock.is_status_ok():
-                return
+        logger.info('SocketIot init.')
+        if self.__sock is None or not self.__sock.is_status_ok():
+            try:
+                self.__disconnect()
+                self.__connect()
+            except Exception as e:
+                logger.error('{} connect error: {}'.format(self.__sock, e))
+                return False
             else:
-                self.__sock.disconnect()
-                self.__recv_thread.stop()
-        self.__sock.connect()
-        self.__recv_thread.start()
+                logger.info('{} connect successfully.'.format(self.__sock))
+                self.__recv_thread.start()
+        return True
+
+    def deinit(self):
+        try:
+            self.__reconnect_thread.stop()
+            self.__recv_thread.stop()
+            self.__disconnect()
+        except Exception as e:
+            logger.warn('SocketIot deinit error: {}'.format(e))
+
+    def __reconnect_thread_worker(self):
+        while not self.init():
+            utime.sleep(self.RECONNECT_INTERVAL)
+        self.__ready.notify_all()
 
     def __recv_thread_worker(self):
         while True:
@@ -107,14 +131,29 @@ class SocketIot(object):
                 if isinstance(e, OSError) and e.args[0] == 110:
                     continue
                 else:
-                    print('{} read error: {}, recv thread break.'.format(self, e))
-                    break
+                    logger.error('{} read error: {}'.format(self, e))
+                    with self.__reconnect_lock:
+                        self.__reconnect_thread.start()
+                    self.__ready.wait()
             else:
-                print('{} recv data: {}'.format(self.__sock, data))
+                logger.debug('{} recv data: {}'.format(self.__sock, data))
                 self.__queue.put({'data': data})
 
     def recv(self, timeout=-1):
         return self.__queue.get(timeout=timeout)
 
     def send(self, data):
-        return self.__sock.write(data)
+        with self.__reconnect_lock:
+            if self.__reconnect_thread.is_running():
+                logger.warn('send failed because because of reconnecting.')
+                return False
+
+        try:
+            is_ok = self.__sock.write(data)
+        except Exception as e:
+            logger.error('{} send error: {}'.format(self.__sock, e))
+            is_ok = False
+
+        if not is_ok:
+            with self.__reconnect_lock:
+                self.__reconnect_thread.start()
