@@ -7,6 +7,7 @@ _thread.stack_size(4096)
 
 def main():
     while checkNet.waitNetworkReady() == (3, 1):
+        print('network not ready, waiting...')
         break
 
     dtu = Dtu('HuaYun')
