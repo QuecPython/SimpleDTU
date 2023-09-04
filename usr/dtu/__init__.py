@@ -1,8 +1,10 @@
 from usr.dtu.serial import Serial
-from usr.dtu.configure import Config
+from usr.dtu.configure import Configure
 from usr.dtu.common import Thread, Condition
 from usr.dtu.clouds import CloudFactory
+from usr.dtu.network import NetMonitor
 from usr.dtu.logging import getLogger
+
 
 logger = getLogger(__name__)
 
@@ -11,7 +13,7 @@ class Dtu(object):
 
     def __init__(self, name):
         self.name = name
-        self.config = Config()
+        self.config = Configure()
         self.upload_thread = Thread(target=self.upload_thread_worker)
         self.download_thread = Thread(target=self.download_thread_worker)
 
@@ -22,7 +24,7 @@ class Dtu(object):
     def cloud(self):
         __cloud__ = getattr(self, '__cloud__', None)
         if __cloud__ is None:
-            __cloud__ = CloudFactory.create()
+            __cloud__ = CloudFactory.create(self.config)
             setattr(self, '__cloud__', __cloud__)
         return __cloud__
 
@@ -36,6 +38,7 @@ class Dtu(object):
 
     def run(self):
         self.serial.init()
+        logger.info('successfully init serial port: {}'.format(self.serial))
         self.cloud.init()
         self.upload_thread.start()
         self.download_thread.start()

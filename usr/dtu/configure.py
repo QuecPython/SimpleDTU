@@ -1,18 +1,62 @@
+import uos
 import ql_fs
-import _thread
-from usr.dtu.common import Singleton
+from usr.dtu.common import Singleton, Lock
+
+
+DEFAULT_CONFIG = {
+    "SYSTEM": {
+        "CLOUD": "SOCKET"
+    },
+    "PARAMS": {
+        "MQTT": {
+            "server": "mq.tongxinmao.com",
+            "port": 18830,
+            "client_id": "txm_1682300809",
+            "user": "",
+            "password": "",
+            "clean_session": True,
+            "qos": 0,
+            "keepalive": 60,
+            "subscribe": "/public/TEST/test",
+            "publish": "/public/TEST/test"
+        },
+        "SOCKET": {
+            "host": "v5.idcfengye.com",
+            "port": 10033,
+            "timeout": 5,
+            "protocol": "TCP"
+        }
+    },
+    "UART": {
+        "port": 2,
+        "baudrate": 115200,
+        "bytesize": 8,
+        "parity": 0,
+        "stopbits": 1,
+        "flowctl": 0,
+        "rs485_pin": None
+    }
+}
 
 
 @Singleton
-class Config(object):
+class Configure(object):
     GET = 0x01
     SET = 0x02
     DEL = 0x03
-    LOCK = _thread.allocate_lock()
+    LOCK = Lock()
 
     def __init__(self):
         self.path = None
-        self.settings = None
+        self.settings = DEFAULT_CONFIG
+
+    def reset(self, save=True):
+        with self.LOCK:
+            self.settings = DEFAULT_CONFIG
+            if self.path and ql_fs.path_exists(self.path):
+                uos.remove(self.path)
+                if save:
+                    ql_fs.touch(self.path, self.settings)
 
     def read_from_json(self, path):
         self.path = path
@@ -44,7 +88,6 @@ class Config(object):
         return self.delete(key)
 
     def execute(self, dict_, keys, value=None, operate=None):
-
         if self.settings is None:
             raise ValueError('settings not loaded. pls use `Config.read_from_json` to load settings from a json file.')
 

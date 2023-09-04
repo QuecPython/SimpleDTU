@@ -1,10 +1,9 @@
-from usr.dtu.configure import Config
 from usr.dtu.clouds.mqttIot import MqttIot
 from usr.dtu.clouds.socketIot import SocketIot
 
 
 class CloudFactory(object):
-    config = Config()
+
     # cloud supported now!
     DEFAULT_CLOUDS = {
         'MQTT': MqttIot,
@@ -12,9 +11,9 @@ class CloudFactory(object):
     }
 
     @classmethod
-    def create(cls):
-        cloud_type = cls.config['SYSTEM.CLOUD']
-        cloud_params = cls.config['PARAMS.{}'.format(cloud_type)]
+    def create(cls, config):
+        cloud_type = config['SYSTEM.CLOUD']
+        cloud_params = config['PARAMS.{}'.format(cloud_type)]
         cloud_cls = cls.DEFAULT_CLOUDS.get(cloud_type)
         if cloud_cls is None:
             raise TypeError(
@@ -25,4 +24,6 @@ class CloudFactory(object):
 
     @classmethod
     def register(cls, name, class_):
+        if name in cls.DEFAULT_CLOUDS:
+            raise ValueError('\"{}\" already registered!'.format(name))
         cls.DEFAULT_CLOUDS[name] = class_
