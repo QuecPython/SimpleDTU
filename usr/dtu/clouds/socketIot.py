@@ -157,3 +157,5 @@ class SocketIot(object):
         if not is_ok:
             with self.__reconnect_lock:
                 self.__reconnect_thread.start()
+
+        return is_ok

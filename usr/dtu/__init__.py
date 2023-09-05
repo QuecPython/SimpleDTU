@@ -73,8 +73,6 @@ class Dtu(object):
         while True:
             data = self.serial.read(1024)
             logger.info('up transfer msg: {}'.format(data))
-            try:
-                self.cloud.send(data)
-            except Exception as e:
-                logger.error('cloud send error: {}'.format(e))
-                self.cloud.init()
+            if not self.cloud.send(data):
+                # do something?
+                pass
