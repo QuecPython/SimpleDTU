@@ -3,8 +3,6 @@ from usr.dtu.common import Condition, Lock
 
 
 class Serial(object):
-    r_lock = Lock()
-    w_lock = Lock()
 
     def __init__(self, port=2, baudrate=115200, bytesize=8, parity=0, stopbits=1, flowctl=0, rs485_pin=None):
         self.__port = port
@@ -17,6 +15,8 @@ class Serial(object):
 
         self.__uart = None
         self.__cond = Condition()
+        self.__r_lock = Lock()
+        self.__w_lock = Lock()
 
     def __str__(self):
         return '<UART{},{},{},{},{},{},{}>'.format(
@@ -44,11 +44,11 @@ class Serial(object):
         self.__cond.notify()
 
     def write(self, data):
-        with self.w_lock:
+        with self.__w_lock:
             self.__uart.write(data)
 
     def read(self, size, timeout=-1):
-        with self.r_lock:
+        with self.__r_lock:
             if self.__uart.any() == 0 and timeout != 0:
                 self.__cond.wait(timeout=timeout)
             data = self.__uart.read(min(size, self.__uart.any()))
