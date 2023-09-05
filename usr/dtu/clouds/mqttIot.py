@@ -63,15 +63,16 @@ class MqttIot(object):
         self.__cli.subscribe(self.__subscribe_topic, self.__qos)
 
     def init(self):
+        logger.info('MqttIot init.')
         if self.__cli is None or self.__cli.get_mqttsta() != 0:
             try:
                 self.__disconnect()
                 self.__connect()
             except Exception as e:
-                logger.error('mqtt connect error: {}'.format(e))
+                logger.error('MqttIot connect error: {}'.format(e))
                 return False
             else:
-                logger.info('mqtt connect successfully.')
+                logger.info('MqttIot connect successfully.')
                 self.__recv_thread.start()
         return True
 
@@ -101,8 +102,8 @@ class MqttIot(object):
             utime.sleep(self.RECONNECT_INTERVAL)
         self.__ready.notify_all()
 
-    def recv(self, timeout=-1):
-        return self.__queue.get(timeout=timeout)
+    def recv(self):
+        return self.__queue.get()
 
     def send(self, data):
 

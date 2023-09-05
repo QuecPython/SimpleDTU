@@ -1,6 +1,6 @@
 {
     "SYSTEM": {
-        "CLOUD": "SOCKET"
+        "CLOUD": "MQTT"
     },
     "PARAMS": {
         "MQTT": {

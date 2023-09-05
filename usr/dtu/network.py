@@ -2,6 +2,7 @@ import uos
 import sim
 import checkNet
 import dataCall
+from usr.dtu.common import PubSub
 from usr.dtu.logging import getLogger
 
 
@@ -9,6 +10,8 @@ logger = getLogger(__name__)
 
 
 class NetMonitor(object):
+    SIM_STATUS_TOPIC = '/sim/status'
+    NET_STATUS_TOPIC = '/net/status'
 
     @classmethod
     def init(cls):
@@ -23,35 +26,22 @@ class NetMonitor(object):
             if sim.setSimDet(1, trigger_level) != 0:
                 logger.info('active sim switch failed.')
             else:
-                if sim.setCallback(cls.__sim_switch_callback) != 0:
+                if sim.setCallback(
+                        lambda state: PubSub.publish(cls.SIM_STATUS_TOPIC, state)
+                ) != 0:
                     logger.warn('register sim switch callback failed.')
         except Exception as e:
             logger.error('sim check init failed: {}'.format(e))
 
-    @staticmethod
-    def __sim_switch_callback(state):
-        if state == 1:
-            logger.info('SIM card insertion')
-        elif state == 2:
-            logger.info('SIM card removal')
-        else:
-            logger.info('unknow sim state')
-
     @classmethod
     def __net_check_init(cls):
         try:
-            if dataCall.setCallback(cls.__net_callback) != 0:
+            if dataCall.setCallback(
+                    lambda args: PubSub.publish(cls.NET_STATUS_TOPIC, args)
+            ) != 0:
                 logger.info('register data callback failed.')
         except Exception as e:
             logger.error('net check init failed: {}'.format(e))
-
-    @staticmethod
-    def __net_callback(args):
-        pdp, state = args[0], args[1]
-        if state == 0:
-            logger.info('network disconnected, PDP ID: {}'.format(pdp))
-        elif state == 1:
-            logger.info('network connected, PDP ID: {}'.format(pdp))
 
     @classmethod
     def wait_network_ready(cls):

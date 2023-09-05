@@ -139,8 +139,8 @@ class SocketIot(object):
                 logger.debug('{} recv data: {}'.format(self.__sock, data))
                 self.__queue.put({'data': data})
 
-    def recv(self, timeout=-1):
-        return self.__queue.get(timeout=timeout)
+    def recv(self):
+        return self.__queue.get()
 
     def send(self, data):
         with self.__reconnect_lock:
