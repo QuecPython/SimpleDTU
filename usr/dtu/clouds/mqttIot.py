@@ -62,9 +62,16 @@ class MqttIot(object):
         self.__cli.connect(self.__clean_session)
         self.__cli.subscribe(self.__subscribe_topic, self.__qos)
 
+    def is_status_ok(self):
+        try:
+            return self.__cli.get_mqttsta() == 0
+        except Exception as e:
+            logger.error('get mqtt status error: {}'.format(e))
+            return False
+
     def init(self):
         logger.info('MqttIot init.')
-        if self.__cli is None or self.__cli.get_mqttsta() != 0:
+        if self.__cli is None or not self.is_status_ok():
             try:
                 self.__disconnect()
                 self.__connect()

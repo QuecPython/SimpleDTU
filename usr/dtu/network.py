@@ -1,5 +1,7 @@
 import uos
 import sim
+import net
+import utime
 import checkNet
 import dataCall
 from usr.dtu.common import PubSub
@@ -51,3 +53,9 @@ class NetMonitor(object):
                 logger.info('net work ready.')
                 break
             logger.warn('network not ready, code: {}. continue waiting...'.format(code))
+
+    @classmethod
+    def cfun_switch(cls):
+        net.setModemFun(0, 0)
+        utime.sleep_ms(200)
+        net.setModemFun(1, 0)

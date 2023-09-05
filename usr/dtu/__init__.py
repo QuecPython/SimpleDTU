@@ -54,12 +54,10 @@ class Dtu(object):
         return __serial__
 
     def run(self):
-        NetMonitor.init()
         self.serial.init()
         self.cloud.init()
         self.upload_thread.start()
         self.download_thread.start()
-        logger.info('Dtu run successfully!')
 
     def download_thread_worker(self):
         logger.info('dtu start download thread: {}'.format(self.download_thread))
