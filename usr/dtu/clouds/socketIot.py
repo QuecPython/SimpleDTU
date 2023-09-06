@@ -1,6 +1,5 @@
-import utime
 import usocket
-from usr.dtu.common import Thread, Queue, Condition, Lock
+from usr.dtu.common import Thread, Queue
 from usr.dtu.logging import getLogger
 
 
@@ -83,9 +82,6 @@ class SocketIot(object):
         self.__sock = None
         self.__queue = Queue()
         self.__recv_thread = Thread(target=self.__recv_thread_worker)
-        self.__reconnect_thread = Thread(target=self.__reconnect_thread_worker)
-        self.__reconnect_lock = Lock()
-        self.__ready = Condition()
 
     def __connect(self):
         self.__sock = Socket(self.__host, self.__port, self.__timeout, self.__protocol)
@@ -112,16 +108,10 @@ class SocketIot(object):
 
     def deinit(self):
         try:
-            self.__reconnect_thread.stop()
             self.__recv_thread.stop()
             self.__disconnect()
         except Exception as e:
             logger.warn('SocketIot deinit error: {}'.format(e))
-
-    def __reconnect_thread_worker(self):
-        while not self.init():
-            utime.sleep(self.RECONNECT_INTERVAL)
-        self.__ready.notify_all()
 
     def __recv_thread_worker(self):
         while True:
@@ -132,9 +122,8 @@ class SocketIot(object):
                     continue
                 else:
                     logger.error('{} read error: {}'.format(self, e))
-                    with self.__reconnect_lock:
-                        self.__reconnect_thread.start()
-                    self.__ready.wait()
+                    self.__queue.put(None)
+                    break
             else:
                 logger.debug('{} recv msg: {}'.format(self.__sock, msg))
                 self.__queue.put({'msg': msg})
@@ -143,28 +132,14 @@ class SocketIot(object):
         return self.__queue.get()
 
     def send(self, data, transparent=False):
-        with self.__reconnect_lock:
-            if self.__reconnect_thread.is_running():
-                logger.warn('send failed because because of reconnecting.')
-                return False
-
         try:
             if transparent:
                 msg = data
             else:
                 msg = data['msg']
-        except Exception as e:
-            logger.error(e)
-            return False
-
-        try:
             is_ok = self.__sock.write(msg)
         except Exception as e:
             logger.error('{} send error: {}'.format(self.__sock, e))
             is_ok = False
-
-        if not is_ok:
-            with self.__reconnect_lock:
-                self.__reconnect_thread.start()
 
         return is_ok

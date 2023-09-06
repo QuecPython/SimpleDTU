@@ -1,7 +1,7 @@
 from usr.dtu.serial import Serial
 from usr.dtu.configure import Configure
 from usr.dtu.common import Thread, Condition, TimeoutError, Event
-from usr.dtu.clouds import CloudFactory
+from usr.dtu.clouds import CloudFactory, CloudReconnectThread
 from usr.dtu.logging import getLogger
 from usr.dtu.network import PubSub, NetMonitor
 from usr.dtu.message import Message, Parser
@@ -17,9 +17,10 @@ class Dtu(object):
         self.config = Configure()
         self.upload_thread = Thread(target=self.upload_thread_worker)
         self.download_thread = Thread(target=self.download_thread_worker)
+        self.transparent_event = Event()
+        self.cloud_reconnect_thread = CloudReconnectThread()
         PubSub.subscribe(NetMonitor.SIM_STATUS_TOPIC, self.__sim_status_callback)
         PubSub.subscribe(NetMonitor.NET_STATUS_TOPIC, self.__net_status_callback)
-        self.transparent_event = Event()
 
     def __repr__(self):
         return '<Dtu "{}">'.format(self.name)
@@ -38,6 +39,7 @@ class Dtu(object):
             self.serial.write(('NETWORK DISCONNECTED, PDP: {}.\n'.format(pdp)).encode())
         else:
             self.serial.write(('NETWORK CONNECTED, PDP: {}.\n'.format(pdp)).encode())
+            self.cloud_reconnect_thread.notify()
 
     @property
     def cloud(self):
@@ -59,6 +61,8 @@ class Dtu(object):
         self.init_transparent_mode()
         self.serial.init()
         self.cloud.init()
+        self.cloud_reconnect_thread.add_cloud(self.cloud)
+        self.cloud_reconnect_thread.start()
         self.upload_thread.start()
         self.download_thread.start()
 
@@ -72,6 +76,9 @@ class Dtu(object):
         logger.info('dtu start download thread: {}'.format(self.download_thread))
         while True:
             payload = self.cloud.recv()
+            if payload is None:
+                self.cloud_reconnect_thread.notify()
+                continue
             logger.info('down transfer msg: {}'.format(payload))
             if self.transparent_event.is_set():
                 self.serial.write(payload['msg'])
@@ -105,4 +112,5 @@ class Dtu(object):
                         for msg in parser.messages:
                             if not self.cloud.send(msg.payload, transparent=False):
                                 # do something?
+                                self.cloud_reconnect_thread.notify()
                                 pass

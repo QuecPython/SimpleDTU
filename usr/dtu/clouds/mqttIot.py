@@ -1,13 +1,11 @@
-import utime
 from umqtt import MQTTClient
-from usr.dtu.common import Queue, Thread, Condition, Lock
+from usr.dtu.common import Queue, Thread
 from usr.dtu.logging import getLogger
 
 logger = getLogger(__name__)
 
 
 class MqttIot(object):
-    RECONNECT_INTERVAL = 10
 
     def __init__(self, client_id, server, **options):
         """init umqtt.MQTTClient instance.
@@ -44,9 +42,6 @@ class MqttIot(object):
         self.__queue = Queue()
         self.__cli = None
         self.__recv_thread = Thread(target=self.__recv_thread_worker)
-        self.__reconnect_thread = Thread(target=self.__reconnect_thread_worker)
-        self.__reconnect_lock = Lock()
-        self.__ready = Condition()
 
     def __disconnect(self):
         if self.__cli:
@@ -87,7 +82,6 @@ class MqttIot(object):
 
     def deinit(self):
         try:
-            self.__reconnect_thread.stop()
             self.__recv_thread.stop()
             self.__disconnect()
         except Exception as e:
@@ -105,15 +99,9 @@ class MqttIot(object):
             try:
                 self.__cli.wait_msg()
             except Exception as e:
-                logger.error('mqtt listen error: {}, try reconnecting.'.format(str(e)))
-                with self.__reconnect_lock:
-                    self.__reconnect_thread.start()
-                self.__ready.wait()
-
-    def __reconnect_thread_worker(self):
-        while not self.init():
-            utime.sleep(self.RECONNECT_INTERVAL)
-        self.__ready.notify_all()
+                logger.error('mqtt listen error: {}'.format(str(e)))
+                self.__queue.put(None)
+                break
 
     def recv(self):
         return self.__queue.get()
@@ -131,13 +119,7 @@ class MqttIot(object):
         return topic
 
     def send(self, data, transparent=False):
-
-        # check if reconnect thread is running
-        with self.__reconnect_lock:
-            if self.__reconnect_thread.is_running():
-                logger.warn('send failed because mqtt is reconnecting.')
-                return False
-
+        # try to publish, we catch all exceptions and check the return value for `MQTTClient.publish`.
         try:
             if transparent:
                 topic = self.__get_transparent_topic()
@@ -145,21 +127,9 @@ class MqttIot(object):
             else:
                 topic = self.__get_publish_topic_by_id(data['topic_id'])
                 msg = data['msg']
-        except Exception as e:
-            logger.error(e)
-            return False
-
-        # try to publish, we catch all exceptions and check the return value for `MQTTClient.publish`.
-        try:
             is_ok = self.__cli.publish(topic, msg, qos=self.__qos)
         except Exception as e:
             logger.error('mqtt send error: {}'.format(e))
             is_ok = False
-
-        if not is_ok:
-            with self.__reconnect_lock:
-                # try to start reconnect thread.
-                # if the thread is running, we do nothing.(`start` method will check running status.)
-                self.__reconnect_thread.start()
 
         return is_ok

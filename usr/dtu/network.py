@@ -50,7 +50,7 @@ class NetMonitor(object):
         while True:
             code = checkNet.waitNetworkReady()
             if code == (3, 1):
-                logger.info('net work ready.')
+                logger.info('network ready.')
                 break
             logger.warn('network not ready, code: {}. continue waiting...'.format(code))
 
