@@ -94,7 +94,11 @@ class MqttIot(object):
             logger.warn('MqttIot deinit error: {}'.format(e))
 
     def __callback(self, topic, data):
-        self.__queue.put({'topic': topic, 'msg': data})
+        for k, v in self.__subscribe_topic.items():
+            if v == topic.decode():
+                topic_id = k
+                self.__queue.put({'topic_id': topic_id, 'msg': data})
+                return
 
     def __recv_thread_worker(self):
         while True:
