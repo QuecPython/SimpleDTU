@@ -5,7 +5,8 @@ from usr.dtu.common import Singleton, Lock
 
 DEFAULT_CONFIG = {
     "SYSTEM": {
-        "CLOUD": "SOCKET"
+        "CLOUD": "SOCKET",
+        "TRANSPARENT": False
     },
     "PARAMS": {
         "MQTT": {
@@ -17,8 +18,13 @@ DEFAULT_CONFIG = {
             "clean_session": True,
             "qos": 0,
             "keepalive": 60,
-            "subscribe": "/public/TEST/test",
-            "publish": "/public/TEST/test"
+            "subscribe_topic": {
+                "0": "/public/TEST/test"
+            },
+            "publish_topic": {
+                "0": "/public/TEST/test"
+            },
+            "default_publish_topic_id": "0"
         },
         "SOCKET": {
             "host": "v5.idcfengye.com",

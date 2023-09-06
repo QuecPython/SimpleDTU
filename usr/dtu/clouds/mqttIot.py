@@ -36,8 +36,9 @@ class MqttIot(object):
         options['reconn'] = False  # 禁用内部重连机制
         self.__clean_session = options.pop('clean_session', True)
         self.__qos = options.pop('qos', 0)
-        self.__subscribe_topic = options.pop('subscribe', '/public/test')
-        self.__publish_topic = options.pop('publish', '/public/test')
+        self.__subscribe_topic = options.pop('subscribe_topic', {})
+        self.__publish_topic = options.pop('publish_topic', {})
+        self.__default_publish_topic_id = options.pop('default_publish_topic_id', '0')
 
         self.__options = options
         self.__queue = Queue()
@@ -60,7 +61,8 @@ class MqttIot(object):
         )
         self.__cli.set_callback(self.__callback)
         self.__cli.connect(self.__clean_session)
-        self.__cli.subscribe(self.__subscribe_topic, self.__qos)
+        for topic in self.__subscribe_topic.values():
+            self.__cli.subscribe(topic, self.__qos)
 
     def is_status_ok(self):
         try:
@@ -92,7 +94,7 @@ class MqttIot(object):
             logger.warn('MqttIot deinit error: {}'.format(e))
 
     def __callback(self, topic, data):
-        self.__queue.put({'topic': topic, 'data': data})
+        self.__queue.put({'topic': topic, 'msg': data})
 
     def __recv_thread_worker(self):
         while True:
@@ -112,7 +114,19 @@ class MqttIot(object):
     def recv(self):
         return self.__queue.get()
 
-    def send(self, data):
+    def __get_transparent_topic(self):
+        topic = self.__publish_topic.get(self.__default_publish_topic_id)
+        if topic is None:
+            raise ValueError('cannot found transparent topic')
+        return topic
+
+    def __get_publish_topic_by_id(self, topic_id):
+        topic = self.__publish_topic.get(topic_id)
+        if topic is None:
+            raise ValueError('cannot found topic by id: {}'.format(topic_id))
+        return topic
+
+    def send(self, data, transparent=False):
 
         # check if reconnect thread is running
         with self.__reconnect_lock:
@@ -120,9 +134,20 @@ class MqttIot(object):
                 logger.warn('send failed because mqtt is reconnecting.')
                 return False
 
+        try:
+            if transparent:
+                topic = self.__get_transparent_topic()
+                msg = data
+            else:
+                topic = self.__get_publish_topic_by_id(data['topic_id'])
+                msg = data['msg']
+        except Exception as e:
+            logger.error(e)
+            return False
+
         # try to publish, we catch all exceptions and check the return value for `MQTTClient.publish`.
         try:
-            is_ok = self.__cli.publish(self.__publish_topic, data)
+            is_ok = self.__cli.publish(topic, msg, qos=self.__qos)
         except Exception as e:
             logger.error('mqtt send error: {}'.format(e))
             is_ok = False

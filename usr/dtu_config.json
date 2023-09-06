@@ -1,6 +1,7 @@
 {
     "SYSTEM": {
-        "CLOUD": "MQTT"
+        "CLOUD": "MQTT",
+        "TRANSPARENT": true
     },
     "PARAMS": {
         "MQTT": {
@@ -12,8 +13,13 @@
             "clean_session": true,
             "qos": 0,
             "keepalive": 60,
-            "subscribe": "/public/TEST/test",
-            "publish": "/public/TEST/test"
+            "subscribe_topic": {
+                "0": "/public/TEST/test"
+            },
+            "publish_topic": {
+                "0": "/public/TEST/test"
+            },
+            "default_publish_topic_id": "0"
         },
         "SOCKET": {
             "host": "v5.idcfengye.com",

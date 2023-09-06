@@ -1,9 +1,10 @@
 from usr.dtu.serial import Serial
 from usr.dtu.configure import Configure
-from usr.dtu.common import Thread, Condition
+from usr.dtu.common import Thread, Condition, TimeoutError, Event
 from usr.dtu.clouds import CloudFactory
 from usr.dtu.logging import getLogger
 from usr.dtu.network import PubSub, NetMonitor
+from usr.dtu.message import Message, Parser
 
 
 logger = getLogger(__name__)
@@ -18,6 +19,7 @@ class Dtu(object):
         self.download_thread = Thread(target=self.download_thread_worker)
         PubSub.subscribe(NetMonitor.SIM_STATUS_TOPIC, self.__sim_status_callback)
         PubSub.subscribe(NetMonitor.NET_STATUS_TOPIC, self.__net_status_callback)
+        self.transparent_event = Event()
 
     def __repr__(self):
         return '<Dtu "{}">'.format(self.name)
@@ -54,23 +56,53 @@ class Dtu(object):
         return __serial__
 
     def run(self):
+        self.init_transparent_mode()
         self.serial.init()
         self.cloud.init()
         self.upload_thread.start()
         self.download_thread.start()
+
+    def init_transparent_mode(self):
+        if self.config['SYSTEM.TRANSPARENT']:
+            self.transparent_event.set()
+        else:
+            self.transparent_event.clear()
 
     def download_thread_worker(self):
         logger.info('dtu start download thread: {}'.format(self.download_thread))
         while True:
             payload = self.cloud.recv()
             logger.info('down transfer msg: {}'.format(payload))
-            self.serial.write(payload['data'])
+            if self.transparent_event.is_set():
+                self.serial.write(payload['msg'])
+            else:
+                self.serial.write(Message(payload).dump())
 
     def upload_thread_worker(self):
         logger.info('dtu start upload thread: {}'.format(self.upload_thread))
+        parser = Parser(load=True)
         while True:
-            data = self.serial.read(1024)
-            logger.info('up transfer msg: {}'.format(data))
-            if not self.cloud.send(data):
-                # do something?
-                pass
+            try:
+                data = self.serial.read(1024, timeout=10)
+                logger.info('up transfer msg: {}'.format(data))
+            except TimeoutError:
+                parser.clear()
+            else:
+                if data == b'+++++':
+                    self.transparent_event.set()
+                    self.config['SYSTEM.TRANSPARENT'] = True
+                    self.config.save()
+                elif data == b'-----':
+                    self.transparent_event.clear()
+                    self.config['SYSTEM.TRANSPARENT'] = False
+                    self.config.save()
+                    parser.clear()
+                else:
+                    if self.transparent_event.is_set():
+                        self.cloud.send(data, transparent=True)
+                    else:
+                        parser.parse(data)
+                        for msg in parser.messages:
+                            if not self.cloud.send(msg.payload, transparent=False):
+                                # do something?
+                                pass

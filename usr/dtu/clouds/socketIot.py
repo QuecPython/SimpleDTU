@@ -126,7 +126,7 @@ class SocketIot(object):
     def __recv_thread_worker(self):
         while True:
             try:
-                data = self.__sock.read()
+                msg = self.__sock.read()
             except Exception as e:
                 if isinstance(e, OSError) and e.args[0] == 110:
                     continue
@@ -136,20 +136,29 @@ class SocketIot(object):
                         self.__reconnect_thread.start()
                     self.__ready.wait()
             else:
-                logger.debug('{} recv data: {}'.format(self.__sock, data))
-                self.__queue.put({'data': data})
+                logger.debug('{} recv msg: {}'.format(self.__sock, msg))
+                self.__queue.put({'msg': msg})
 
     def recv(self):
         return self.__queue.get()
 
-    def send(self, data):
+    def send(self, data, transparent=False):
         with self.__reconnect_lock:
             if self.__reconnect_thread.is_running():
                 logger.warn('send failed because because of reconnecting.')
                 return False
 
         try:
-            is_ok = self.__sock.write(data)
+            if transparent:
+                msg = data
+            else:
+                msg = data['msg']
+        except Exception as e:
+            logger.error(e)
+            return False
+
+        try:
+            is_ok = self.__sock.write(msg)
         except Exception as e:
             logger.error('{} send error: {}'.format(self.__sock, e))
             is_ok = False
