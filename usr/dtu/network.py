@@ -4,6 +4,7 @@ import net
 import utime
 import checkNet
 import dataCall
+from misc import Power
 from usr.dtu.common import PubSub
 from usr.dtu.logging import getLogger
 
@@ -47,12 +48,23 @@ class NetMonitor(object):
 
     @classmethod
     def wait_network_ready(cls):
+        total = 0
+
         while True:
-            code = checkNet.waitNetworkReady()
+            code = checkNet.waitNetworkReady(30)
             if code == (3, 1):
                 logger.info('network ready.')
                 break
+
             logger.warn('network not ready, code: {}. continue waiting...'.format(code))
+            total += 1
+
+            if 3 <= total < 6:
+                logger.info('make cfun swtich.')
+                cls.cfun_switch()
+            if total >= 6:
+                logger.info('power restart.')
+                Power.powerRestart()
 
     @classmethod
     def cfun_switch(cls):

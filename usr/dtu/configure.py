@@ -5,7 +5,7 @@ from usr.dtu.common import Singleton, Lock
 
 DEFAULT_CONFIG = {
     "SYSTEM": {
-        "CLOUD": "SOCKET",
+        "CLOUD": "MQTT",
         "TRANSPARENT": False
     },
     "PARAMS": {

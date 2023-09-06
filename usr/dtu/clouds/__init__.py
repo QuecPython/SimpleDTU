@@ -1,4 +1,4 @@
-from usr.dtu.common import Thread, Condition
+from usr.dtu.common import Thread, Lock
 from usr.dtu.network import NetMonitor
 from usr.dtu.clouds.mqttIot import MqttIot
 from usr.dtu.clouds.socketIot import SocketIot
@@ -22,7 +22,9 @@ class CloudFactory(object):
                 'cloud \"{}\" not supported now!'
                 'maybe you wanna register one using `CloudFactory.register` method.'.format(cloud_type)
             )
-        return cloud_cls(**cloud_params)
+        cloud = cloud_cls(**cloud_params)
+        cloud.reconnect_thread = CloudReconnectThread(cloud)
+        return cloud
 
     @classmethod
     def register(cls, name, class_):
@@ -33,13 +35,12 @@ class CloudFactory(object):
 
 class CloudReconnectThread(object):
 
-    def __init__(self):
-        self.__cloud = None
+    def __init__(self, cloud):
+        self.__cloud = cloud
         self.__thread = Thread(target=self.__cloud_reconnect_thread_worker)
-        self.__cond = Condition()
         self.start = self.__thread.start
         self.stop = self.__thread.stop
-        self.is_running = self.__thread.is_running
+        self.__reconnect_lock = Lock()
 
     def add_cloud(self, cloud):
         self.__cloud = cloud
@@ -47,13 +48,19 @@ class CloudReconnectThread(object):
     def start(self):
         if self.__cloud is None:
             raise ValueError('cloud can not be  None, use `add_cloud` method.')
-        self.__thread.start()
+        with self.__reconnect_lock:
+            self.__thread.start()
+
+    def stop(self):
+        with self.__reconnect_lock:
+            self.__thread.stop()
+
+    def is_running(self):
+        with self.__reconnect_lock:
+            return self.__thread.is_running()
 
     def __cloud_reconnect_thread_worker(self):
         while True:
-            self.__cond.wait()
             NetMonitor.wait_network_ready()
-            self.__cloud.init()
-
-    def notify(self):
-        self.__cond.notify()
+            if self.__cloud.init():
+                break

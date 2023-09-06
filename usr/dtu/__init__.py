@@ -18,7 +18,6 @@ class Dtu(object):
         self.upload_thread = Thread(target=self.upload_thread_worker)
         self.download_thread = Thread(target=self.download_thread_worker)
         self.transparent_event = Event()
-        self.cloud_reconnect_thread = CloudReconnectThread()
         PubSub.subscribe(NetMonitor.SIM_STATUS_TOPIC, self.__sim_status_callback)
         PubSub.subscribe(NetMonitor.NET_STATUS_TOPIC, self.__net_status_callback)
 
@@ -39,7 +38,7 @@ class Dtu(object):
             self.serial.write(('NETWORK DISCONNECTED, PDP: {}.\n'.format(pdp)).encode())
         else:
             self.serial.write(('NETWORK CONNECTED, PDP: {}.\n'.format(pdp)).encode())
-            self.cloud_reconnect_thread.notify()
+            self.cloud.reconnect_thread.start()
 
     @property
     def cloud(self):
@@ -61,8 +60,6 @@ class Dtu(object):
         self.init_transparent_mode()
         self.serial.init()
         self.cloud.init()
-        self.cloud_reconnect_thread.add_cloud(self.cloud)
-        self.cloud_reconnect_thread.start()
         self.upload_thread.start()
         self.download_thread.start()
 
@@ -77,7 +74,7 @@ class Dtu(object):
         while True:
             payload = self.cloud.recv()
             if payload is None:
-                self.cloud_reconnect_thread.notify()
+                self.cloud.reconnect_thread.start()
                 continue
             logger.info('down transfer msg: {}'.format(payload))
             if self.transparent_event.is_set():
@@ -88,6 +85,7 @@ class Dtu(object):
     def upload_thread_worker(self):
         logger.info('dtu start upload thread: {}'.format(self.upload_thread))
         parser = Parser(load=True)
+
         while True:
             try:
                 data = self.serial.read(1024, timeout=10)
@@ -106,11 +104,14 @@ class Dtu(object):
                     parser.clear()
                 else:
                     if self.transparent_event.is_set():
-                        self.cloud.send(data, transparent=True)
+                        data_list = [data]
+                        flag = True
                     else:
                         parser.parse(data)
-                        for msg in parser.messages:
-                            if not self.cloud.send(msg.payload, transparent=False):
-                                # do something?
-                                self.cloud_reconnect_thread.notify()
-                                pass
+                        data_list = [m.payload for m in parser.messages]
+                        flag=False
+                    for data in data_list:
+                        if not self.cloud.send(data, transparent=flag):
+                            self.cloud.reconnect_thread.start()
+                            # do something else?
+                            pass
