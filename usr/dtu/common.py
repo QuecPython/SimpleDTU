@@ -34,7 +34,6 @@ class Waiter(object):
 
     def __init__(self):
         self.__lock = _thread.allocate_lock()
-        self.__lock.acquire()
         self.__unlock_timer = osTimer()
         self.__is_timeout = False
 
@@ -43,7 +42,9 @@ class Waiter(object):
         self.release()
 
     def acquire(self, timeout=-1):
+        self.__lock.acquire()
         if timeout > 0:
+            self.__is_timeout = False
             self.__unlock_timer.start(timeout * 1000, 0, self.__auto_unlock)
         self.__lock.acquire()  # block until timeout or release
         self.__unlock_timer.stop()
