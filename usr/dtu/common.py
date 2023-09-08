@@ -30,11 +30,11 @@ class Waiter(object):
         self.__gotit = True
 
     def __auto_release(self, _):
-        self.__gotit = False
-        self.__release()
+        if self.__release():
+            self.__gotit = False
 
     def __acquire(self):
-        self.__lock.acquire()
+        return self.__lock.acquire()
 
     def acquire(self, timeout=-1):
         self.__lock.acquire()
@@ -48,11 +48,14 @@ class Waiter(object):
         return self.__gotit
 
     def __release(self):
-        if self.__lock.locked():
+        try:
             self.__lock.release()
+        except RuntimeError:
+            return False
+        return True
 
     def release(self):
-        self.__release()
+        return self.__release()
 
 
 class Condition(object):
@@ -112,6 +115,9 @@ class Event(object):
 
 class _Result(object):
 
+    class TimeoutError(Exception):
+        pass
+
     def __init__(self):
         self.__rv = None
         self.__exc = None
@@ -123,10 +129,12 @@ class _Result(object):
         self.__finished.set()
 
     def get(self, timeout=-1):
-        self.__finished.wait(timeout=timeout)
-        if self.__exc:
-            raise self.__exc
-        return self.__rv
+        if self.__finished.wait(timeout=timeout):
+            if self.__exc:
+                raise self.__exc
+            return self.__rv
+        else:
+            raise self.TimeoutError('get result timeout.')
 
 
 class Thread(object):
