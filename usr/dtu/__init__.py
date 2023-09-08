@@ -1,6 +1,6 @@
-from usr.dtu.serial import Serial
+from usr.dtu.serial import Serial, TimeoutError
 from usr.dtu.configure import Configure
-from usr.dtu.common import Thread, Condition, TimeoutError, Event
+from usr.dtu.common import Thread, Condition, Event
 from usr.dtu.clouds import CloudFactory, CloudReconnectThread
 from usr.dtu.logging import getLogger
 from usr.dtu.network import PubSub, NetMonitor

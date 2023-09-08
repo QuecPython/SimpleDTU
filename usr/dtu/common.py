@@ -8,10 +8,6 @@ from queue import Queue
 Lock = _thread.allocate_lock
 
 
-class TimeoutError(Exception):
-    pass
-
-
 class Singleton(object):
     def __init__(self, cls):
         self.cls = cls
@@ -31,10 +27,10 @@ class Waiter(object):
     def __init__(self):
         self.__lock = _thread.allocate_lock()
         self.__unlock_timer = osTimer()
-        self.__is_timeout = False
+        self.__gotit = True
 
     def __auto_release(self, _):
-        self.__is_timeout = True
+        self.__gotit = False
         self.__release()
 
     def __acquire(self):
@@ -42,15 +38,14 @@ class Waiter(object):
 
     def acquire(self, timeout=-1):
         self.__lock.acquire()
-        self.__is_timeout = False
+        self.__gotit = True
         if timeout > 0:
             self.__unlock_timer.start(timeout * 1000, 0, self.__auto_release)
         self.__acquire()  # block here
         if timeout > 0:
             self.__unlock_timer.stop()
         self.__release()
-        if self.__is_timeout:
-            raise TimeoutError
+        return self.__gotit
 
     def __release(self):
         if self.__lock.locked():
@@ -70,14 +65,10 @@ class Condition(object):
         waiter = Waiter()
         with self.__lock:
             self.__waiters.append(waiter)
-
-        try:
-            waiter.acquire(timeout)  # block until timeout or notify
-        except TimeoutError as exc:
-            raise exc
-        finally:
-            with self.__lock:
-                self.__waiters.remove(waiter)
+        gotit = waiter.acquire(timeout)
+        with self.__lock:
+            self.__waiters.remove(waiter)
+        return gotit
 
     def notify(self, n=1):
         if n <= 0:
@@ -100,10 +91,10 @@ class Event(object):
         self.cond = Condition()
 
     def wait(self, timeout=-1):
-        """wait until internal flag is True"""
-        if not self.is_set():
-            self.cond.wait(timeout)
-        return self.flag
+        signaled = self.is_set()
+        if not signaled:
+            signaled = self.cond.wait(timeout)
+        return signaled
 
     def set(self):
         with self.__lock:
