@@ -1,4 +1,4 @@
-from usr.dtu.serial import Serial, TimeoutError
+from usr.dtu.serial import Serial
 from usr.dtu.configure import Configure
 from usr.dtu.common import Thread, Condition, Event
 from usr.dtu.clouds import CloudFactory, CloudReconnectThread
@@ -90,7 +90,7 @@ class Dtu(object):
             try:
                 data = self.serial.read(1024, timeout=10)
                 logger.info('up transfer msg: {}'.format(data))
-            except TimeoutError:
+            except Serial.TimeoutError:
                 parser.clear()
             else:
                 if data == b'+++++':

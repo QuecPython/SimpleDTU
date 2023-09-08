@@ -2,11 +2,10 @@ from machine import UART, Timer
 from usr.dtu.common import Condition, Lock
 
 
-class TimeoutError(Exception):
-    pass
-
-
 class Serial(object):
+
+    class TimeoutError(Exception):
+        pass
 
     def __init__(self, port=2, baudrate=115200, bytesize=8, parity=0, stopbits=1, flowctl=0, rs485_pin=None):
         self.__port = port
@@ -55,6 +54,6 @@ class Serial(object):
         with self.__r_lock:
             if self.__uart.any() == 0 and timeout != 0:
                 if not self.__cond.wait(timeout=timeout):
-                    raise TimeoutError
+                    raise self.TimeoutError('serial read timeout.')
             data = self.__uart.read(min(size, self.__uart.any()))
             return data

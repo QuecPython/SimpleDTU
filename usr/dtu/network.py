@@ -55,10 +55,9 @@ class NetMonitor(object):
             if code == (3, 1):
                 logger.info('network ready.')
                 break
-
             logger.warn('network not ready, code: {}. continue waiting...'.format(code))
-            total += 1
 
+            total += 1
             if 3 <= total < 6:
                 logger.info('make cfun swtich.')
                 cls.cfun_switch()

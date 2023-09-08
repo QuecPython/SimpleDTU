@@ -32,6 +32,7 @@ class Waiter(object):
     def __auto_release(self, _):
         if self.__release():
             self.__gotit = False
+            print(id(self.__gotit))
 
     def __acquire(self):
         return self.__lock.acquire()
@@ -45,6 +46,7 @@ class Waiter(object):
         if timeout > 0:
             self.__unlock_timer.stop()
         self.__release()
+        print(id(self.__gotit))
         return self.__gotit
 
     def __release(self):
