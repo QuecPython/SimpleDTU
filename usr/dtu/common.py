@@ -248,3 +248,41 @@ class PubSub(object):
         with cls.PUBSUB_LOCK:
             for cb in cls.TOPIC_MAP.get(topic, []):
                 Thread(target=cb, args=args, kwargs=kwargs).start()
+
+
+class Logger(object):
+
+    DEBUG = 0x01
+    INFO = 0x02
+    ERROR = 0x03
+
+    LEVEL_MAP = {
+        DEBUG: 'DEBUG',
+        INFO: 'INFO',
+        ERROR: 'ERROR'
+    }
+
+    def __init__(self, name, level=None):
+        self.__name = name
+        self.__level = level or self.DEBUG
+
+    def log(self, level, *msg):
+        time = utime.localtime()
+        if level >= self.__level:
+            print(
+                '[{time}][{name}][{level}]:{message}'.format(
+                    time='{}-{}-{} {}:{}:{}'.format(*time[:6]),
+                    name=self.__name,
+                    level=self.LEVEL_MAP[level],
+                    message=','.join([str(m) for m in msg])
+                )
+            )
+
+    def debug(self, *msg):
+        self.log(self.DEBUG, *msg)
+
+    def info(self, *msg):
+        self.log(self.INFO, *msg)
+
+    def error(self, *msg):
+        self.log(self.ERROR, *msg)
