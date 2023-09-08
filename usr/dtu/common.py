@@ -193,7 +193,7 @@ class _WorkItem(object):
 
 class ThreadPoolExecutor(object):
 
-    def __init__(self, max_workers=10):
+    def __init__(self, max_workers=4):
         if max_workers <= 0:
             raise ValueError("max_workers must be greater than 0")
         self.__max_workers = max_workers
@@ -227,6 +227,7 @@ class ThreadPoolExecutor(object):
         with self.__lock:
             for t in self.__threads:
                 t.stop()
+            self.__threads.clear()
 
 
 class PubSub(object):
