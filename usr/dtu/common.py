@@ -12,10 +12,6 @@ class TimeoutError(Exception):
     pass
 
 
-class FullError(Exception):
-    pass
-
-
 class Singleton(object):
     def __init__(self, cls):
         self.cls = cls
@@ -37,25 +33,31 @@ class Waiter(object):
         self.__unlock_timer = osTimer()
         self.__is_timeout = False
 
-    def __auto_unlock(self, _):
+    def __auto_release(self, _):
         self.__is_timeout = True
-        self.release()
+        self.__release()
+
+    def __acquire(self):
+        self.__lock.acquire()
 
     def acquire(self, timeout=-1):
         self.__lock.acquire()
+        self.__is_timeout = False
         if timeout > 0:
-            self.__is_timeout = False
-            self.__unlock_timer.start(timeout * 1000, 0, self.__auto_unlock)
-        self.__lock.acquire()  # block until timeout or release
-        self.__unlock_timer.stop()
-        if self.__lock.locked():
-            self.__lock.release()
+            self.__unlock_timer.start(timeout * 1000, 0, self.__auto_release)
+        self.__acquire()  # block here
+        if timeout > 0:
+            self.__unlock_timer.stop()
+        self.__release()
         if self.__is_timeout:
             raise TimeoutError
 
-    def release(self):
+    def __release(self):
         if self.__lock.locked():
             self.__lock.release()
+
+    def release(self):
+        self.__release()
 
 
 class Condition(object):
