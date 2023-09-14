@@ -145,7 +145,6 @@ class Thread(object):
         self.__args = args
         self.__kwargs = kwargs or {}
         self.__worker_thread_id = None
-        self.__lock = Lock()
 
     def __repr__(self):
         return '<Thread {}>'.format(self.__worker_thread_id)
