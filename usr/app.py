@@ -4,8 +4,6 @@
 @Email : dustin.wei@quectel.com
 @Date : 2023/9/15 17:43 
 """
-
-
 from usr.common.serial import Serial
 from usr.common.configure import Configure
 from usr.common.threading import Thread, Event
