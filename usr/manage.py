@@ -1,6 +1,6 @@
 import _thread
-from usr.dtu import Dtu
-from usr.dtu.network import NetMonitor
+from usr.app import Dtu
+from usr.common.network import NetMonitor
 
 
 # for 800E

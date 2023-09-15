@@ -1,10 +1,19 @@
-from usr.dtu.serial import Serial
-from usr.dtu.configure import Configure
-from usr.dtu.common import Thread, Condition, Event
-from usr.dtu.clouds import CloudFactory, CloudReconnectThread
-from usr.dtu.logging import getLogger
-from usr.dtu.network import PubSub, NetMonitor
-from usr.dtu.message import Message, Parser
+"""
+@File : app.py
+@Author : Dustin Wei
+@Email : dustin.wei@quectel.com
+@Date : 2023/9/15 17:43 
+"""
+
+
+from usr.common.serial import Serial
+from usr.common.configure import Configure
+from usr.common.threading import Thread, Event
+from usr.common.pubsub import PubSub
+from usr.common.network import NetMonitor
+from usr.common.logging import getLogger
+from usr.clouds import CloudFactory
+from usr.message import Message, Parser
 
 
 logger = getLogger(__name__)
@@ -58,7 +67,6 @@ class Dtu(object):
 
     def run(self):
         self.init_transparent_mode()
-        self.serial.init()
         self.cloud.init()
         self.upload_thread.start()
         self.download_thread.start()

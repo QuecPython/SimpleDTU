@@ -1,48 +1,9 @@
-import uos
 import ql_fs
-from usr.dtu.common import Singleton, Lock
+from usr.common.utils import Singleton
+from usr.common.threading import Lock
 
 
-DEFAULT_CONFIG = {
-    "SYSTEM": {
-        "CLOUD": "MQTT",
-        "TRANSPARENT": False
-    },
-    "PARAMS": {
-        "MQTT": {
-            "server": "mq.tongxinmao.com",
-            "port": 18830,
-            "client_id": "txm_1682300809",
-            "user": "",
-            "password": "",
-            "clean_session": True,
-            "qos": 0,
-            "keepalive": 60,
-            "subscribe_topic": {
-                "0": "/public/TEST/test"
-            },
-            "publish_topic": {
-                "0": "/public/TEST/test"
-            },
-            "default_publish_topic_id": "0"
-        },
-        "SOCKET": {
-            "host": "v5.idcfengye.com",
-            "port": 10033,
-            "timeout": 5,
-            "protocol": "TCP"
-        }
-    },
-    "UART": {
-        "port": 2,
-        "baudrate": 115200,
-        "bytesize": 8,
-        "parity": 0,
-        "stopbits": 1,
-        "flowctl": 0,
-        "rs485_pin": None
-    }
-}
+DEFAULT_CONFIG = {}
 
 
 @Singleton
@@ -52,19 +13,18 @@ class Configure(object):
     DEL = 0x03
     LOCK = Lock()
 
-    def __init__(self):
-        self.path = None
+    def __init__(self, path='/usr/default.conf'):
+        self.path = path
         self.settings = DEFAULT_CONFIG
 
-    def reset(self, save=True):
+    def reset(self):
         with self.LOCK:
             self.settings = DEFAULT_CONFIG
-            if self.path and ql_fs.path_exists(self.path):
-                uos.remove(self.path)
-                if save:
-                    ql_fs.touch(self.path, self.settings)
+            ql_fs.touch(self.path, self.settings)
 
     def read_from_json(self, path):
+        if not ql_fs.path_exists(path):
+            raise ValueError('\"{}\" not exists!'.format(path))
         self.path = path
         self.settings = ql_fs.read_json(path)
 

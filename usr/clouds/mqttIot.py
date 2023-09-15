@@ -1,6 +1,6 @@
 from umqtt import MQTTClient
-from usr.dtu.common import Queue, Thread
-from usr.dtu.logging import getLogger
+from usr.common.threading import Queue, Thread
+from usr.common.logging import getLogger
 
 logger = getLogger(__name__)
 

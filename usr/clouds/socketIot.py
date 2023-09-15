@@ -1,6 +1,6 @@
 import usocket
-from usr.dtu.common import Thread, Queue
-from usr.dtu.logging import getLogger
+from usr.common.threading import Thread, Queue
+from usr.common.logging import getLogger
 
 
 logger = getLogger(__name__)

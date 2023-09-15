@@ -1,7 +1,7 @@
-from usr.dtu.common import Thread, Lock
-from usr.dtu.network import NetMonitor
-from usr.dtu.clouds.mqttIot import MqttIot
-from usr.dtu.clouds.socketIot import SocketIot
+from usr.common.threading import Thread, Lock
+from usr.common.network import NetMonitor
+from usr.clouds.mqttIot import MqttIot
+from usr.clouds.socketIot import SocketIot
 
 
 class CloudFactory(object):
