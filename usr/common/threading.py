@@ -107,17 +107,36 @@ class Condition(object):
     def __is_owned(self):
         return self.__lock.locked() and self.__lock.owner == _thread.get_ident()
 
-    def wait(self, timeout=-1):
+    def wait(self, timeout=None):
         if not self.__is_owned():
             raise RuntimeError("cannot wait on un-acquired lock")
         waiter = Waiter()
         self.__waiters.append(waiter)
         self.release()
         try:
-            return waiter.acquire(timeout)
+            if timeout is None:
+                return waiter.acquire(-1)
+            else:
+                return waiter.acquire(timeout)
         finally:
             self.acquire()
             self.__waiters.remove(waiter)
+
+    def wait_for(self, predicate, timeout=None):
+        endtime = None
+        remaining = timeout
+        result = predicate()
+        while not result:
+            if remaining is not None:
+                if endtime is None:
+                    endtime = utime.time() + remaining
+                else:
+                    remaining = endtime - utime.time()
+                    if remaining <= 0.0:
+                        break
+            self.wait(remaining)
+            result = predicate()
+        return result
 
     def notify(self, n=1):
         if not self.__is_owned():
@@ -145,19 +164,7 @@ class Event(object):
 
     def wait(self, timeout=None):
         with self.__cond:
-            if timeout is None:
-                while not self.__flag:
-                    self.__cond.wait()
-            elif timeout < 0:
-                raise ValueError("'timeout' must be a non-negative number")
-            else:
-                endtime = utime.time() + timeout
-                while not self.__flag:
-                    remaining = endtime - utime.time()
-                    if remaining <= 0.0:
-                        raise self.TimeoutError('get timeout.')
-                    self.__cond.wait(remaining)
-            return self.__flag
+            return self.__cond.wait_for(lambda : self.__flag, timeout=timeout)
 
     def set(self):
         with self.__cond:
@@ -187,38 +194,20 @@ class Queue(object):
 
     def put(self, item, timeout=None):
         with self.__not_full:
-            if timeout is None:
-                while len(self.__deque) >= self.__max_size:
-                    self.__not_full.wait()
-            elif timeout < 0:
-                raise ValueError("'timeout' must be a non-negative number")
+            if self.__not_full.wait_for(lambda : len(self.__deque) < self.__max_size, timeout=timeout):
+                self.__deque.append(item)
+                self.__not_empty.notify()
             else:
-                endtime = utime.time() + timeout
-                while len(self.__deque) >= self.__max_size:
-                    remaining = endtime - utime.time()
-                    if remaining <= 0.0:
-                        raise self.TimeoutError('put timeout.')
-                    self.__not_full.wait(remaining)
-            self.__deque.append(item)
-            self.__not_empty.notify()
+                raise self.TimeoutError('put timeout.')
 
     def get(self, timeout=None):
         with self.__not_empty:
-            if timeout is None:
-                while len(self.__deque) == 0:
-                    self.__not_empty.wait()
-            elif timeout < 0:
-                raise ValueError("'timeout' must be a non-negative number")
+            if self.__not_empty.wait_for(lambda : len(self.__deque) != 0, timeout=timeout):
+                item = self.__deque.pop(0)
+                self.__not_full.notify()
+                return item
             else:
-                endtime = utime.time() + timeout
-                while len(self.__deque) == 0:
-                    remaining = endtime - utime.time()
-                    if remaining <= 0.0:
-                        raise self.TimeoutError('get timeout.')
-                    self.__not_empty.wait(remaining)
-            item = self.__deque.pop(0)
-            self.__not_full.notify()
-            return item
+                raise self.TimeoutError('get timeout.')
 
     def size(self):
         with self.__lock:

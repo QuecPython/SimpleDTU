@@ -4,7 +4,6 @@
 @Email : dustin.wei@quectel.com
 @Date : 2023/9/14 10:54 
 """
-import utime
 from machine import UART
 from usr.common.threading import Condition, Lock
 
@@ -52,7 +51,7 @@ class Serial(object):
 
     def __uart_cb(self, args):
         with self.__r_cond:
-            self.__r_cond.notify()
+            self.__r_cond.notify_all()
 
     def write(self, data):
         with self.__w_cond:
@@ -60,17 +59,7 @@ class Serial(object):
 
     def read(self, size, timeout=None):
         with self.__r_cond:
-            if timeout is None:
-                while self.__uart.any() == 0:
-                    self.__r_cond.wait()
-            elif timeout < 0:
-                raise ValueError("'timeout' must be a non-negative number")
+            if self.__r_cond.wait_for(lambda : self.__uart.any() != 0, timeout=timeout):
+                return self.__uart.read(min(size, self.__uart.any()))
             else:
-                endtime = utime.time() + timeout
-                while self.__uart.any() == 0:
-                    remaining = endtime - utime.time()
-                    if remaining <= 0.0:
-                        raise self.TimeoutError('serial read timeout.')
-                    self.__r_cond.wait(remaining)
-            data = self.__uart.read(min(size, self.__uart.any()))
-            return data
+                raise self.TimeoutError('serial read timeout.')
