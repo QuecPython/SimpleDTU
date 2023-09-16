@@ -96,7 +96,6 @@ class Condition(object):
 
     def __enter__(self):
         self.acquire()
-        return self
 
     def __exit__(self, *args, **kwargs):
         self.release()
