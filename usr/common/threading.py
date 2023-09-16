@@ -115,7 +115,7 @@ class Condition(object):
         self.release()
         try:
             if timeout is None:
-                return waiter.acquire(-1)
+                return waiter.acquire()
             else:
                 return waiter.acquire(timeout)
         finally:
