@@ -91,18 +91,15 @@ class Condition(object):
             lock = Lock()
         self.__lock = lock
         self.__waiters = []
+        self.acquire = self.__lock.acquire
+        self.release = self.__lock.release
 
     def __enter__(self):
         self.acquire()
+        return self
 
     def __exit__(self, *args, **kwargs):
         self.release()
-
-    def acquire(self):
-        self.__lock.acquire()
-
-    def release(self):
-        self.__lock.release()
 
     def __is_owned(self):
         return self.__lock.locked() and self.__lock.owner == _thread.get_ident()
