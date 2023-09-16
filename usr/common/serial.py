@@ -59,7 +59,7 @@ class Serial(object):
 
     def read(self, size, timeout=None):
         with self.__r_cond:
-            if self.__r_cond.wait_for(lambda : self.__uart.any() != 0, timeout=timeout):
+            if self.__r_cond.wait_for(lambda: self.__uart.any() != 0, timeout=timeout):
                 return self.__uart.read(min(size, self.__uart.any()))
             else:
                 raise self.TimeoutError('serial read timeout.')

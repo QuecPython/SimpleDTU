@@ -164,7 +164,7 @@ class Event(object):
 
     def wait(self, timeout=None):
         with self.__cond:
-            return self.__cond.wait_for(lambda : self.__flag, timeout=timeout)
+            return self.__cond.wait_for(lambda: self.__flag, timeout=timeout)
 
     def set(self):
         with self.__cond:
@@ -194,7 +194,7 @@ class Queue(object):
 
     def put(self, item, timeout=None):
         with self.__not_full:
-            if self.__not_full.wait_for(lambda : len(self.__deque) < self.__max_size, timeout=timeout):
+            if self.__not_full.wait_for(lambda: len(self.__deque) < self.__max_size, timeout=timeout):
                 self.__deque.append(item)
                 self.__not_empty.notify()
             else:
@@ -202,7 +202,7 @@ class Queue(object):
 
     def get(self, timeout=None):
         with self.__not_empty:
-            if self.__not_empty.wait_for(lambda : len(self.__deque) != 0, timeout=timeout):
+            if self.__not_empty.wait_for(lambda: len(self.__deque) != 0, timeout=timeout):
                 item = self.__deque.pop(0)
                 self.__not_full.notify()
                 return item
