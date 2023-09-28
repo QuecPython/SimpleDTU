@@ -15,7 +15,7 @@ class CloudFactory(object):
     @classmethod
     def create(cls, config):
         cloud_type = config['SYSTEM.CLOUD']
-        cloud_params = config['PARAMS.{}'.format(cloud_type)]
+        cloud_params = config['CLOUD_PARAMS.{}'.format(cloud_type)]
         cloud_cls = cls.DEFAULT_CLOUDS.get(cloud_type)
         if cloud_cls is None:
             raise TypeError(

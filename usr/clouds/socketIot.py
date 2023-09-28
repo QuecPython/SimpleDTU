@@ -55,6 +55,7 @@ class SocketIot(object):
                 msg = self.__sock.read()
             except Exception as e:
                 if isinstance(e, OSError) and e.args[0] == 110:
+                    logger.debug('socket read timeout')
                     continue
                 else:
                     logger.error('{} read error: {}'.format(self, e))

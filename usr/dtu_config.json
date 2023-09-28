@@ -1,9 +1,9 @@
 {
     "SYSTEM": {
-        "CLOUD": "MQTT",
+        "CLOUD": "SOCKET",
         "TRANSPARENT": true
     },
-    "PARAMS": {
+    "CLOUD_PARAMS": {
         "MQTT": {
             "server": "mq.tongxinmao.com",
             "port": 18830,
@@ -37,7 +37,7 @@
         "flowctl": 0,
         "rs485_config": {
             "gpio_num": 28,
-            "direction": 1
+            "direction": 0
         }
     }
 }
