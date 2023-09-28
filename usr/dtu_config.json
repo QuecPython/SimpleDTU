@@ -35,6 +35,9 @@
         "parity": 0,
         "stopbits": 1,
         "flowctl": 0,
-        "rs485_pin": null
+        "rs485_config": {
+            "gpio_num": 28,
+            "direction": 1
+        }
     }
 }

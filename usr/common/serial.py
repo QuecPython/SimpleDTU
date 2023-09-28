@@ -13,14 +13,14 @@ class Serial(object):
     class TimeoutError(Exception):
         pass
 
-    def __init__(self, port=2, baudrate=115200, bytesize=8, parity=0, stopbits=1, flowctl=0, rs485_pin=None):
+    def __init__(self, port=2, baudrate=115200, bytesize=8, parity=0, stopbits=1, flowctl=0, rs485_config=None):
         self.__port = port
         self.__baudrate = baudrate
         self.__bytesize = bytesize
         self.__parity = parity
         self.__stopbits = stopbits
         self.__flowctl = flowctl
-        self.__rs485_pin = rs485_pin
+        self.__rs485_config = rs485_config
 
         self.__uart = None
         self.__r_cond = Condition()
@@ -31,7 +31,7 @@ class Serial(object):
         return '<UART{},{},{},{},{},{},{}>'.format(
             self.__port, self.__baudrate, self.__bytesize,
             self.__parity, self.__stopbits, self.__flowctl,
-            self.__rs485_pin
+            self.__rs485_config
         )
 
     def __init(self):
@@ -43,9 +43,10 @@ class Serial(object):
             self.__stopbits,
             self.__flowctl
         )
-        if self.__rs485_pin is not None:
-            rs485_pin = getattr(UART, "GPIO{}".format(self.__rs485_pin))
-            self.__uart.control_485(rs485_pin, 1)
+        if isinstance(self.__rs485_config, dict):
+            gpio_num = getattr(UART, "GPIO{}".format(self.__rs485_config['gpio_num']))
+            direction = self.__rs485_config['direction']
+            self.__uart.control_485(gpio_num, direction)
 
         self.__uart.set_callback(self.__uart_cb)
 
