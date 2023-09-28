@@ -151,9 +151,6 @@ class Condition(object):
 
 class Event(object):
 
-    class TimeoutError(Exception):
-        pass
-
     def __init__(self):
         self.__flag = False
         self.__cond = Condition()
