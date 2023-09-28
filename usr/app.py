@@ -11,7 +11,7 @@ from usr.common.pubsub import PubSub
 from usr.common.network import NetMonitor
 from usr.common.logging import getLogger
 from usr.clouds import CloudFactory
-from usr.message import Message, Parser
+from usr.common.message import Message, Parser
 
 
 logger = getLogger(__name__)
