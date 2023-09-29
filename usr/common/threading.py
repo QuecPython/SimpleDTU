@@ -64,6 +64,7 @@ class Waiter(object):
             self.__gotit = True
 
     def acquire(self, timeout=-1):
+        """timeout <= 0 for blocking forever."""
         self.__gotit = True
         if timeout > 0:
             self.unlock_timer.start(timeout * 1000, 0, self.__auto_release)
@@ -175,7 +176,10 @@ class Event(object):
 
 class Queue(object):
 
-    class TimeoutError(Exception):
+    class Full(Exception):
+        pass
+
+    class Empty(Exception):
         pass
 
     def __init__(self, max_size=100):
@@ -185,22 +189,32 @@ class Queue(object):
         self.__not_empty = Condition(self.__lock)
         self.__not_full = Condition(self.__lock)
 
-    def put(self, item, timeout=None):
+    def put(self, item, block=True, timeout=None):
         with self.__not_full:
-            if self.__not_full.wait_for(lambda: len(self.__deque) < self.__max_size, timeout=timeout):
-                self.__deque.append(item)
-                self.__not_empty.notify()
+            if not block:
+                if len(self.__deque) >= self.__max_size:
+                    raise self.Full
+            elif timeout is not None and timeout <= 0:
+                raise ValueError("'timeout' must be a positive number")
             else:
-                raise self.TimeoutError('put timeout.')
+                if not self.__not_full.wait_for(lambda: len(self.__deque) < self.__max_size, timeout=timeout):
+                    raise self.Full
+            self.__deque.append(item)
+            self.__not_empty.notify()
 
-    def get(self, timeout=None):
+    def get(self, block=True, timeout=None):
         with self.__not_empty:
-            if self.__not_empty.wait_for(lambda: len(self.__deque) != 0, timeout=timeout):
-                item = self.__deque.pop(0)
-                self.__not_full.notify()
-                return item
+            if not block:
+                if len(self.__deque) == 0:
+                    raise self.Empty
+            elif timeout is not None and timeout <= 0:
+                raise ValueError("'timeout' must be a positive number")
             else:
-                raise self.TimeoutError('get timeout.')
+                if not self.__not_empty.wait_for(lambda: len(self.__deque) != 0, timeout=timeout):
+                    raise self.Empty
+            item = self.__deque.pop(0)
+            self.__not_full.notify()
+            return item
 
     def size(self):
         with self.__lock:
