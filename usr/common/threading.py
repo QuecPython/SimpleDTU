@@ -43,6 +43,7 @@ class Lock(object):
 
 
 class Waiter(object):
+    """WARNING: Waiter object can only be used once."""
 
     def __init__(self):
         self.__lock = Lock()
