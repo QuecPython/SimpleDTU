@@ -1,77 +1,69 @@
 from machine import UART
-from machine import Timer
-from queue import Queue
-from usr.logging import getLogger
+from usr.threading import Condition, Lock
 
 
 class Serial(object):
-    def __init__(self,
-                 uart=2,
-                 baudrate=115200,
-                 databits=8,
-                 parity=0,
-                 stopbits=1,
-                 flowctl=0,
-                 rs485_direction_pin=""):
 
-        uart_port = getattr(UART, "UART%d" % int(uart))
-        self._uart = UART(uart_port, baudrate, databits, parity, stopbits, flowctl)
-        # init rs458 rx/tx pin
-        if rs485_direction_pin != "":
-            rs485_pin = getattr(UART, "GPIO%d" % int(rs485_direction_pin))
-            self._uart.control_485(rs485_pin, 0)
-        self._queue = Queue(maxsize=1)
-        self._timer = Timer(Timer.Timer1)
-        self._log = getLogger(__name__)
+    class TimeoutError(Exception):
+        pass
 
-        self._uart.set_callback(self._uart_cb)
-        self.log_enable(False)
+    def __init__(self, port=2, baudrate=115200, bytesize=8, parity=0, stopbits=1, flowctl=0, rs485_config=None):
+        self.__port = port
+        self.__baudrate = baudrate
+        self.__bytesize = bytesize
+        self.__parity = parity
+        self.__stopbits = stopbits
+        self.__flowctl = flowctl
+        self.__rs485_config = rs485_config
 
-    def _uart_cb(self, args):
-        self._log.debug("_uart_cb called with args:", args)
-        if self._queue.size() == 0:
-            self._log.debug("_uart_cb send a signal")
-            self._queue.put(None)
+        self.__uart = None
+        self.__r_cond = Condition()
+        self.__w_cond = Lock()
 
-    def _timer_cb(self, args):
-        self._log.debug("_timer_cb called with args:", args)
-        if self._queue.size() == 0:
-            self._log.debug("_timer_cb send a signal")
-            self._queue.put(None)
+    def __repr__(self):
+        return '<UART{},{},{},{},{},{},{}>'.format(
+            self.__port, self.__baudrate, self.__bytesize,
+            self.__parity, self.__stopbits, self.__flowctl,
+            self.__rs485_config
+        )
 
-    def log_enable(self, en):
-        if not isinstance(en, bool):
-            return False
+    @property
+    def uart(self):
+        if self.__uart is None:
+            raise TypeError('uart not open.')
+        return self.__uart
 
-        if en:
-            self._log.set_level("debug")
-        else:
-            self._log.set_level("critical")
+    def open(self):
+        self.__uart = UART(
+            getattr(UART, 'UART{}'.format(self.__port)),
+            self.__baudrate,
+            self.__bytesize,
+            self.__parity,
+            self.__stopbits,
+            self.__flowctl
+        )
+        if isinstance(self.__rs485_config, dict):
+            gpio_num = getattr(UART, "GPIO{}".format(self.__rs485_config['gpio_num']))
+            direction = self.__rs485_config['direction']
+            self.__uart.control_485(gpio_num, direction)
 
-        self._log.set_debug(en)
-        return True
+        self.__uart.set_callback(self.__uart_cb)
+
+    def close(self):
+        self.__uart.close()
+        self.__uart = None
+
+    def __uart_cb(self, _):
+        with self.__r_cond:
+            self.__r_cond.notify_all()
 
     def write(self, data):
-        self._uart.write(data)
+        with self.__w_cond:
+            return self.uart.write(data)
 
-    def read(self, nbytes, timeout=0):
-        if nbytes == 0:
-            return ''
-
-        if self._uart.any() == 0 and timeout != 0:
-            timer_started = False
-            if timeout > 0:  # < 0 for wait forever
-                self._log.debug("start a timeout timer:", timeout)
-                self._timer.start(period=timeout, mode=Timer.ONE_SHOT, callback=self._timer_cb)
-                timer_started = True
-            self._log.debug("wait for a signal")
-            self._queue.get()
-            if timer_started:
-                self._timer.stop()
-
-        r_data = self._uart.read(min(nbytes, self._uart.any())).decode()
-        if self._queue.size():
-            self._log.debug("clean an extra signal")
-            self._queue.get()
-
-        return r_data
+    def read(self, size, timeout=None):
+        with self.__r_cond:
+            if self.__r_cond.wait_for(lambda: self.uart.any() != 0, timeout=timeout):
+                return self.uart.read(min(size, self.uart.any()))
+            else:
+                raise self.TimeoutError('serial read timeout.')

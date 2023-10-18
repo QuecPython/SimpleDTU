@@ -4,6 +4,7 @@ from usr.serial import Serial
 from usr.mqttIot import MqttIot
 from usr.socketIot import SocketIot
 from usr.logging import getLogger
+from usr.configure import Configure
 
 
 logger = getLogger(__name__)
@@ -11,13 +12,20 @@ logger = getLogger(__name__)
 
 class DTU(object):
 
-    def __init__(self, config):
+    def __init__(self, name):
+        self.name = name
         self.queue = Queue()  # DTU应用与MQTT、TCP客户端下行数据交互队列
-        self.serial = Serial(**config.get('uart_config'))
+        self.config = Configure()
+        self.serial = None
+        self.cloud = None
 
-        cloud_type = config.get('system_config.cloud')
+    def init(self):
+        self.serial = Serial(**self.config.get('uart_config'))
+        self.serial.open()
+
+        cloud_type = self.config.get('system_config.cloud')
         if cloud_type == "mqtt":
-            mqtt_config = config.get('mqtt_private_cloud_config')
+            mqtt_config = self.config.get('mqtt_private_cloud_config')
             self.cloud = MqttIot(
                 mqtt_config['client_id'],
                 mqtt_config['server'],
@@ -33,7 +41,7 @@ class DTU(object):
                 error_trans=True
             )
         elif cloud_type == "tcp":
-            socket_config = config.get('socket_private_cloud_config')
+            socket_config = self.config.get('socket_private_cloud_config')
             self.cloud = SocketIot(
                 ip_type=socket_config['ip_type'],
                 keep_alive=socket_config['keep_alive'],
@@ -42,10 +50,12 @@ class DTU(object):
                 queue=self.queue,
                 error_trans=True
             )
+        else:
+            raise ValueError('{} unsupported now.'.format(cloud_type))
+        self.cloud.init()
 
     def run(self):
-        # 初始化云对象
-        self.cloud.init()
+        self.init()
         # 启动上行数据处理线程
         self.up_transaction()
         # 启动下行数据处理线程

@@ -1,55 +1,64 @@
-import _thread
-import ujson as json
+import ql_fs
+from usr.utils import Singleton
+from usr.threading import Lock
 
 
-class JsonConfigureClass(object):
+@Singleton
+class Configure(object):
     GET = 0x01
     SET = 0x02
     DEL = 0x03
+    LOCK = Lock()
+    DEFAULT_CONFIG_PATH = '/usr/default_config.json'
 
-    def __init__(self, path, encoding='utf8'):
-        self.path = path
-        self.encoding = encoding
-        self.lock = _thread.allocate_lock()
+    def __init__(self):
+        self.path = None
         self.settings = None
-        self.load()  # first load setting from json file.
+        self.reset_default()
 
-    def load(self, reload=False):
-        if (self.settings is None) or reload:
-            with self.lock:
-                with open(self.path, 'r', encoding=self.encoding) as f:
-                    self.settings = json.load(f)
+    def __repr__(self):
+        return 'Configure(path=\'{}\')'.format(self.path)
 
-    def reload(self):
-        self.load(reload=True)
+    def reset_default(self):
+        if ql_fs.path_exists(self.DEFAULT_CONFIG_PATH):
+            with self.LOCK:
+                self.settings = ql_fs.read_json(self.DEFAULT_CONFIG_PATH)
+
+    def read_from_json(self, path):
+        self.path = path
+        with self.LOCK:
+            if not ql_fs.path_exists(path):
+                raise ValueError('\"{}\" not exists!'.format(path))
+            self.settings = ql_fs.read_json(path)
 
     def save(self):
-        with self.lock:
-            with open(self.path, 'w+', encoding=self.encoding) as f:
-                json.dump(self.settings, f)
+        with self.LOCK:
+            ql_fs.touch(self.path, self.settings)
 
     def get(self, key):
-        with self.lock:
+        with self.LOCK:
             return self.execute(self.settings, key.split('.'), operate=self.GET)
 
     def __getitem__(self, item):
         return self.get(item)
 
     def set(self, key, value):
-        with self.lock:
+        with self.LOCK:
             return self.execute(self.settings, key.split('.'), value=value, operate=self.SET)
 
     def __setitem__(self, key, value):
         return self.set(key, value)
 
     def delete(self, key):
-        with self.lock:
+        with self.LOCK:
             return self.execute(self.settings, key.split('.'), operate=self.DEL)
 
     def __delitem__(self, key):
         return self.delete(key)
 
     def execute(self, dict_, keys, value=None, operate=None):
+        if self.settings is None:
+            raise ValueError('settings not loaded. pls use `Config.read_from_json` to load settings from a json file.')
 
         key = keys.pop(0)
 
@@ -69,10 +78,3 @@ class JsonConfigureClass(object):
                 return
 
         return self.execute(dict_[key], keys, value=value, operate=operate)
-
-
-def ConfigureHandler(path):
-    if path.endswith('.json'):
-        return JsonConfigureClass(path)
-    else:
-        raise TypeError('file format not supported!')

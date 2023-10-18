@@ -1,6 +1,3 @@
-"""
-检查sim卡和网络状态，如有异常尝试CFUN切换或重启
-"""
 import net
 import utime
 import _thread

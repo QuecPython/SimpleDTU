@@ -2,7 +2,6 @@ import usys
 import utime
 import _thread
 import usocket
-import checkNet
 from usr import error
 from usr.logging import getLogger
 from usr.net_manager import NetManager

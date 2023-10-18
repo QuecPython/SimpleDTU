@@ -16,17 +16,16 @@
     },
     "socket_private_cloud_config": {
         "ip_type":"IPv4",
-        "domain": "47.113.147.169",
-        "port": "6666",
-        "keep_alive": 1
+        "domain": "220.180.239.212",
+        "port": "8305",
+        "keep_alive": 5
     },
     "uart_config": {
-        "uart": 2,
+        "port": 2,
         "baudrate": 115200,
-        "databits": 8,
+        "bytesize": 8,
         "parity": 0,
         "stopbits": 1,
-        "flowctl": 0,
-        "rs485_direction_pin": "28"
+        "flowctl": 0
     }
 }

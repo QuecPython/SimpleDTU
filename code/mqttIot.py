@@ -3,7 +3,6 @@ MQTT客户端抽象类
 """
 import _thread
 import utime
-import checkNet
 from umqtt import MQTTClient
 from usr import error
 from usr.logging import getLogger
