@@ -39,7 +39,6 @@ class MqttIot(object):
         self.publish_topic = self.kwargs.pop('publish', {})
         self.__queue = Queue()
         self.kwargs.setdefault('reconn', False)  # 禁用内部重连机制
-
         self.__cli = None
         self.__listen_thread = Thread(target=self.__listen_thread_worker)
         self.__reconn_thread = Thread(target=self.__reconnect)

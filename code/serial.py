@@ -15,7 +15,6 @@ class Serial(object):
         self.__stopbits = stopbits
         self.__flowctl = flowctl
         self.__rs485_config = rs485_config
-
         self.__uart = None
         self.__r_cond = Condition()
         self.__w_cond = Lock()
