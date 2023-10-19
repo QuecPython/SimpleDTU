@@ -1,18 +1,12 @@
-"""
-MQTT客户端抽象类
-"""
-import _thread
-import utime
 from umqtt import MQTTClient
 from usr.logging import getLogger
-from usr.net_manager import NetManager
-from usr.threading import Queue
+from usr.threading import Queue, Thread
+
 
 logger = getLogger(__name__)
 
 
 class MqttIot(object):
-    RECONNECT_WAIT_SECONDS = 20
 
     def __init__(self, *args, **kwargs):
         """init umqtt.MQTTClient instance.
@@ -34,55 +28,40 @@ class MqttIot(object):
                 整数类型 0：发送者只发送一次消息，不进行重试 1：发送者最少发送一次消息，确保消息到达Broker。
             subscribe_topic - 订阅主题。
             publish_topic - 发布主题。
-            queue - MQTT下行数据透传队列。
-            error_trans - 串口吐异常信息(开启True，关闭False，默认False)
         """
         self.clean_session = kwargs.pop('clean_session', True)
         self.qos = kwargs.pop('qos', 0)
-        self.subscribe_topic = kwargs.pop('subscribe_topic', '/public/test')
-        self.publish_topic = kwargs.pop('publish_topic', '/public/test')
+        self.subscribe_topic = kwargs.pop('subscribe_topic', {})
+        self.publish_topic = kwargs.pop('publish_topic', {})
         self.queue = Queue()
-        self.error_trans = kwargs.pop('error_trans', False)
 
         kwargs.setdefault('reconn', False)  # 禁用内部重连机制
         self.cli = MQTTClient(*args, **kwargs)
-
-    def init(self):
-        self.cli.set_callback(self.callback)
-        self.connect()
-        self.listen()
+        self.__recv_thread = Thread(target=self.__recv_thread_worker)
 
     def callback(self, topic, data):
         self.queue.put({'topic': topic, 'data': data})
 
-    def put_error(self, e):
-        if self.error_trans:
-            self.queue.put((None, str(e)))
+    def disconnect(self):
+        self.__recv_thread.stop()
+        self.cli.disconnect()
 
     def connect(self):
-
-        while True:
-            # 重连
-            try:
-                self.cli.connect()
-            except Exception as e:
-                logger.error('mqtt connect failed. {}'.format(str(e)))
-                utime.sleep(self.RECONNECT_WAIT_SECONDS)
-                continue
-            # 订阅
+        try:
+            self.disconnect()
+            self.cli.connect()
+        except Exception as e:
+            logger.error('mqtt connect failed. {}'.format(str(e)))
+        else:
             try:
                 self.cli.subscribe(self.subscribe_topic, self.qos)
             except Exception as e:
                 logger.error('mqtt subscribe failed. {}'.format(str(e)))
-                utime.sleep(self.RECONNECT_WAIT_SECONDS)
-                continue
-            logger.info('mqtt connect successfully!')
-            break
+            else:
+                self.__recv_thread.start()
+        logger.info('mqtt connect successfully!')
 
-    def listen(self):
-        _thread.start_new_thread(self.listen_thread_worker, ())
-
-    def listen_thread_worker(self):
+    def __recv_thread_worker(self):
         while True:
             try:
                 self.cli.wait_msg()

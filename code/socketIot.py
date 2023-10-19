@@ -1,6 +1,7 @@
+import utime
 import usocket
 from usr.logging import getLogger
-from usr.threading import Queue, Thread
+from usr.threading import Queue, Thread, Condition
 
 
 logger = getLogger(__name__)
@@ -84,10 +85,11 @@ class SocketIot(object):
     ):
         self.__sock = Socket(domain, port, timeout=timeout, keep_alive=keep_alive)
         self.queue = Queue()
-        self.__recv_thread = Thread(target=self.recv_thread_worker)
+        self.__listen_thread = Thread(target=self.__listen_thread_worker)
+        self.__reconn_thread = Thread(target=self.__reconnect)
+        self.__reconn_cond = Condition()
 
-    def recv_thread_worker(self):
-        """Read data by socket."""
+    def __listen_thread_worker(self):
         while True:
             try:
                 data = self.__sock.read(1024)
@@ -96,20 +98,40 @@ class SocketIot(object):
                 if isinstance(e, OSError) and e.args[0] == 110:
                     logger.debug('read timeout.')
                     continue
-                logger.error('tcp listen error: {}'.format(e))
-                break
+                logger.error('tcp recv error: {}'.format(e))
+                with self.__reconn_cond:
+                    self.__reconn_thread.start()
+                    self.__reconn_cond.wait_for(self.is_status_ok)
+
+    def __reconnect(self):
+        while True:
+            logger.info('connecting...')
+            with self.__reconn_cond:
+                self.disconnect()
+                if self.connect():
+                    self.__reconn_cond.notify_all()
+                    logger.info('connect successfully.')
+                    break
+            utime.sleep(10)
+
+    def disconnect(self):
+        try:
+            self.__sock.disconnect()
+        except Exception as e:
+            logger.error('socket disconnect failed: {}'.format(e))
+            return False
+        return True
 
     def connect(self):
         try:
             self.__sock.connect()
         except Exception as e:
             logger.error('socket connect failed: {}'.format(e))
-        else:
-            self.__recv_thread.start()
+            return False
+        return True
 
-    def disconnect(self):
-        self.__recv_thread.stop()
-        self.__sock.disconnect()
+    def listen(self):
+        self.__listen_thread.start()
 
     def is_status_ok(self):
         return self.__sock.is_status_ok()
@@ -118,7 +140,9 @@ class SocketIot(object):
         try:
             self.__sock.write(data)
         except Exception as e:
-            logger.error('tcp socket send error: {}, prepare to check network.'.format(str(e)))
+            logger.error('tcp socket send error: {}.'.format(str(e)))
+            with self.__reconn_cond:
+                self.__reconn_thread.start()
 
     def recv(self):
         return self.queue.get()

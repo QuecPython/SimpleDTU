@@ -46,6 +46,7 @@ class DTU(object):
         else:
             return
         cloud.connect()
+        cloud.listen()
         return cloud
 
     @property
