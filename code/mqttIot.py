@@ -1,7 +1,8 @@
 import utime
 from umqtt import MQTTClient
+from usr import network
 from usr.logging import getLogger
-from usr.threading import Queue, Thread, Condition
+from usr.threading import Queue, Thread, Condition, Lock
 
 
 logger = getLogger(__name__)
@@ -43,6 +44,7 @@ class MqttIot(object):
         self.__listen_thread = Thread(target=self.__listen_thread_worker)
         self.__reconn_thread = Thread(target=self.__reconnect)
         self.__reconn_cond = Condition()
+        self.__reconn_mutex = Lock()
 
     def __callback(self, topic, data):
         self.queue.put({'topic': topic, 'data': data})
@@ -54,13 +56,18 @@ class MqttIot(object):
             except Exception as e:
                 logger.error('mqtt listen error: {}'.format(str(e)))
                 with self.__reconn_cond:
-                    self.__reconn_thread.start()
+                    self.reconnect()
                     self.__reconn_cond.wait_for(self.is_status_ok)
+
+    def reconnect(self):
+        with self.__reconn_mutex:
+            self.__reconn_thread.start()
 
     def __reconnect(self):
         while True:
             logger.info('mqtt connecting...')
             with self.__reconn_cond:
+                network.wait_network_ready()
                 self.__disconnect()
                 if self.connect():
                     self.__reconn_cond.notify_all()
@@ -104,16 +111,14 @@ class MqttIot(object):
         self.__disconnect()
 
     def is_status_ok(self):
-        return self.cli.get_mqttsta() == 0
+        return self.cli is not None and self.cli.get_mqttsta() == 0
 
     def send(self, topic_id, data):
-        try:
-            if not self.cli.publish(self.publish_topic[topic_id], data):
-                logger.error('publish failed.')
-        except Exception as e:
-            logger.error('publish failed with error: {}, prepare to check network.'.format(e))
-            with self.__reconn_cond:
-                self.__reconn_thread.start()
+        if self.is_status_ok():
+            return self.cli.publish(self.publish_topic[topic_id], data)
+        else:
+            self.reconnect()
+            return False
 
     def recv(self):
         return self.queue.get()

@@ -5,6 +5,7 @@ from usr.logging import getLogger
 from usr.configure import Configure
 from usr.threading import Thread
 
+
 logger = getLogger(__name__)
 
 
@@ -13,6 +14,9 @@ class DTU(object):
     def __init__(self, name):
         self.name = name
         self.config = Configure()
+
+    def __str__(self):
+        return '<DTU \"{}\">'.format(self.name)
 
     @property
     def serial(self):
@@ -46,6 +50,7 @@ class DTU(object):
         return cloud
 
     def run(self):
+        logger.info('{} run forever.'.format(self))
         # 启动上行数据处理线程
         logger.info('start up transaction worker thread {}.'.format(Thread.get_current_thread_ident()))
         Thread(target=self.up_transaction_handler).start()
@@ -68,6 +73,12 @@ class DTU(object):
                 data = self.serial.read(1024)
                 if data:
                     logger.info('up transfer msg: {}'.format(data))
-                    self.cloud.send('up', data)
+                    if isinstance(self.cloud, SocketIot):
+                        msg = [data]
+                    elif isinstance(self.cloud, MqttIot):
+                        msg = ['up', data]
+                    else:
+                        raise TypeError('unknow cloud type.')
+                    self.cloud.send(*msg)
             except Exception as e:
                 logger.error('up transfer error: {}'.format(e))

@@ -1,6 +1,6 @@
 {
     "system_config": {
-        "cloud": "mqtt"
+        "cloud": "tcp"
     },
     "mqtt_private_cloud_config": {
         "server": "mq.tongxinmao.com",

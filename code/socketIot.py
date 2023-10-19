@@ -1,7 +1,8 @@
 import utime
 import usocket
+from usr import network
 from usr.logging import getLogger
-from usr.threading import Queue, Thread, Condition
+from usr.threading import Queue, Thread, Condition, Lock
 
 
 logger = getLogger(__name__)
@@ -88,6 +89,7 @@ class SocketIot(object):
         self.__listen_thread = Thread(target=self.__listen_thread_worker)
         self.__reconn_thread = Thread(target=self.__reconnect)
         self.__reconn_cond = Condition()
+        self.__reconn_mutex = Lock()
 
     def __listen_thread_worker(self):
         while True:
@@ -100,13 +102,18 @@ class SocketIot(object):
                     continue
                 logger.error('tcp recv error: {}'.format(e))
                 with self.__reconn_cond:
-                    self.__reconn_thread.start()
+                    self.reconnect()
                     self.__reconn_cond.wait_for(self.is_status_ok)
+
+    def reconnect(self):
+        with self.__reconn_mutex:
+            self.__reconn_thread.start()
 
     def __reconnect(self):
         while True:
             logger.info('connecting...')
             with self.__reconn_cond:
+                network.wait_network_ready()
                 self.__disconnect()
                 if self.connect():
                     self.__reconn_cond.notify_all()
@@ -142,12 +149,11 @@ class SocketIot(object):
         return self.__sock.is_status_ok()
 
     def send(self, data):
-        try:
-            self.__sock.write(data)
-        except Exception as e:
-            logger.error('tcp socket send error: {}.'.format(str(e)))
-            with self.__reconn_cond:
-                self.__reconn_thread.start()
+        if self.is_status_ok():
+            return self.__sock.write(data)
+        else:
+            self.reconnect()
+            return False
 
     def recv(self):
         return self.queue.get()
