@@ -15,9 +15,9 @@ SIM_STATUS_TOPIC = '/sim/status'
 NET_STATUS_TOPIC = '/net/status'
 
 
-def sim_check_init():
+def active_sim_hot_swap():
     try:
-        trigger_level = 1
+        trigger_level = 0
         if sim.setSimDet(1, trigger_level) != 0:
             logger.info('active sim switch failed.')
         else:
@@ -29,7 +29,7 @@ def sim_check_init():
         logger.error('sim check init failed: {}'.format(e))
 
 
-def net_check_init():
+def active_net_callback():
     try:
         if dataCall.setCallback(
             lambda args: sys_bus.publish(NET_STATUS_TOPIC, args)
@@ -61,3 +61,7 @@ def cfun_switch():
     net.setModemFun(0, 0)
     utime.sleep_ms(200)
     net.setModemFun(1, 0)
+
+
+active_sim_hot_swap()
+active_net_callback()
