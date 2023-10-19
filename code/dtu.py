@@ -32,7 +32,7 @@ class DTU(object):
             socket_config = self.config.get('socket_private_cloud_config')
             cloud = SocketIot(**socket_config)
         else:
-            return
+            raise ValueError('\"{}\" not supported now!'.format(cloud_type))
         cloud.connect()
         cloud.listen()
         return cloud
