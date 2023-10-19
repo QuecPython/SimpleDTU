@@ -31,28 +31,28 @@ class MqttIot(object):
             subscribe - 订阅主题。
             publish - 发布主题。
         """
-        self.clean_session = kwargs.pop('clean_session', True)
-        self.qos = kwargs.pop('qos', 0)
-        self.subscribe_topic = kwargs.pop('subscribe', {})
-        self.publish_topic = kwargs.pop('publish', {})
-        self.queue = Queue()
-        kwargs.setdefault('reconn', False)  # 禁用内部重连机制
-
         self.args = args
         self.kwargs = kwargs
-        self.cli = None
+        self.clean_session = self.kwargs.pop('clean_session', True)
+        self.qos = self.kwargs.pop('qos', 0)
+        self.subscribe_topic = self.kwargs.pop('subscribe', {})
+        self.publish_topic = self.kwargs.pop('publish', {})
+        self.__queue = Queue()
+        self.kwargs.setdefault('reconn', False)  # 禁用内部重连机制
+
+        self.__cli = None
         self.__listen_thread = Thread(target=self.__listen_thread_worker)
         self.__reconn_thread = Thread(target=self.__reconnect)
         self.__reconn_cond = Condition()
         self.__reconn_mutex = Lock()
 
     def __callback(self, topic, data):
-        self.queue.put({'topic': topic, 'data': data})
+        self.__queue.put({'topic': topic, 'data': data})
 
     def __listen_thread_worker(self):
         while True:
             try:
-                self.cli.wait_msg()
+                self.__cli.wait_msg()
             except Exception as e:
                 logger.error('mqtt listen error: {}'.format(str(e)))
                 with self.__reconn_cond:
@@ -77,8 +77,8 @@ class MqttIot(object):
 
     def __disconnect(self):
         try:
-            self.cli.disconnect()
-            self.cli = None
+            self.__cli.disconnect()
+            self.__cli = None
         except Exception as e:
             logger.error('mqtt disconnect failed: {}'.format(e))
             return False
@@ -86,17 +86,17 @@ class MqttIot(object):
 
     def connect(self):
         try:
-            self.cli = MQTTClient(*self.args, **self.kwargs)
-            self.cli.connect()
+            self.__cli = MQTTClient(*self.args, **self.kwargs)
+            self.__cli.connect(clean_session=self.clean_session)
         except Exception as e:
             logger.error('mqtt connect failed. {}'.format(str(e)))
             return False
         else:
             try:
-                self.cli.set_callback(self.__callback)
+                self.__cli.set_callback(self.__callback)
                 for topic in self.subscribe_topic.values():
                     logger.info('subscribe topic: {}'.format(topic))
-                    self.cli.subscribe(topic, self.qos)
+                    self.__cli.subscribe(topic, self.qos)
             except Exception as e:
                 logger.error('mqtt subscribe failed. {}'.format(str(e)))
                 return False
@@ -111,14 +111,14 @@ class MqttIot(object):
         self.__disconnect()
 
     def is_status_ok(self):
-        return self.cli is not None and self.cli.get_mqttsta() == 0
+        return self.__cli is not None and self.__cli.get_mqttsta() == 0
 
     def send(self, topic_id, data):
         if self.is_status_ok():
-            return self.cli.publish(self.publish_topic[topic_id], data)
+            return self.__cli.publish(self.publish_topic[topic_id], data, qos=self.qos)
         else:
             self.reconnect()
             return False
 
     def recv(self):
-        return self.queue.get()
+        return self.__queue.get()

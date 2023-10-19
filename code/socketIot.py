@@ -85,7 +85,7 @@ class SocketIot(object):
             keep_alive=None
     ):
         self.__sock = Socket(domain, port, timeout=timeout, keep_alive=keep_alive)
-        self.queue = Queue()
+        self.__queue = Queue()
         self.__listen_thread = Thread(target=self.__listen_thread_worker)
         self.__reconn_thread = Thread(target=self.__reconnect)
         self.__reconn_cond = Condition()
@@ -95,7 +95,7 @@ class SocketIot(object):
         while True:
             try:
                 data = self.__sock.read(1024)
-                self.queue.put({'data': data})
+                self.__queue.put({'data': data})
             except Exception as e:
                 if isinstance(e, OSError) and e.args[0] == 110:
                     # logger.debug('read timeout.')
@@ -156,4 +156,4 @@ class SocketIot(object):
             return False
 
     def recv(self):
-        return self.queue.get()
+        return self.__queue.get()
