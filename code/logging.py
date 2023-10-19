@@ -48,8 +48,7 @@ class BasicConfig(object):
     basic_configure = {
         'level': Level.WARN,
         'debug': True,
-        'stream': sys.stdout,
-        'filters': set(),
+        'stream': sys.stdout
     }
 
     @classmethod
@@ -60,7 +59,6 @@ class BasicConfig(object):
                 cls.logger_register_table[name] = logger
             else:
                 logger = cls.logger_register_table[name]
-            cls.basic_configure['filters'].add(name)
             return logger
 
     @classmethod
@@ -105,8 +103,6 @@ class Logger(object):
     def log(self, level, *message):
         if not BasicConfig.get('debug'):
             if level < BasicConfig.get('level'):
-                return
-            if self.name not in BasicConfig.get('filters'):
                 return
         stream = BasicConfig.get('stream')
         prefix = '[{}][{}][{}]'.format(
