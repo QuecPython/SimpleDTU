@@ -1,6 +1,7 @@
+import utime
 from umqtt import MQTTClient
 from usr.logging import getLogger
-from usr.threading import Queue, Thread
+from usr.threading import Queue, Thread, Condition
 
 
 logger = getLogger(__name__)
@@ -26,56 +27,93 @@ class MqttIot(object):
                 如果为False，则客户端是持久客户端，当客户端断开连接时，订阅信息和排队消息将被保留。默认为True。
             qos - MQTT消息服务质量（默认0，可选择0或1）.
                 整数类型 0：发送者只发送一次消息，不进行重试 1：发送者最少发送一次消息，确保消息到达Broker。
-            subscribe_topic - 订阅主题。
-            publish_topic - 发布主题。
+            subscribe - 订阅主题。
+            publish - 发布主题。
         """
         self.clean_session = kwargs.pop('clean_session', True)
         self.qos = kwargs.pop('qos', 0)
-        self.subscribe_topic = kwargs.pop('subscribe_topic', {})
-        self.publish_topic = kwargs.pop('publish_topic', {})
+        self.subscribe_topic = kwargs.pop('subscribe', {})
+        self.publish_topic = kwargs.pop('publish', {})
         self.queue = Queue()
-
         kwargs.setdefault('reconn', False)  # 禁用内部重连机制
-        self.cli = MQTTClient(*args, **kwargs)
-        self.__recv_thread = Thread(target=self.__recv_thread_worker)
 
-    def callback(self, topic, data):
+        self.args = args
+        self.kwargs = kwargs
+        self.cli = None
+        self.__listen_thread = Thread(target=self.__listen_thread_worker)
+        self.__reconn_thread = Thread(target=self.__reconnect)
+        self.__reconn_cond = Condition()
+
+    def __callback(self, topic, data):
         self.queue.put({'topic': topic, 'data': data})
 
-    def disconnect(self):
-        self.__recv_thread.stop()
-        self.cli.disconnect()
-
-    def connect(self):
-        try:
-            self.disconnect()
-            self.cli.connect()
-        except Exception as e:
-            logger.error('mqtt connect failed. {}'.format(str(e)))
-        else:
-            try:
-                self.cli.subscribe(self.subscribe_topic, self.qos)
-            except Exception as e:
-                logger.error('mqtt subscribe failed. {}'.format(str(e)))
-            else:
-                self.__recv_thread.start()
-        logger.info('mqtt connect successfully!')
-
-    def __recv_thread_worker(self):
+    def __listen_thread_worker(self):
         while True:
             try:
                 self.cli.wait_msg()
             except Exception as e:
-                logger.error('mqtt listen error continue to reconnect. {}'.format(str(e)))
-                self.cli.close()
-                self.connect()
+                logger.error('mqtt listen error: {}'.format(str(e)))
+                with self.__reconn_cond:
+                    self.__reconn_thread.start()
+                    self.__reconn_cond.wait_for(self.is_status_ok)
 
-    def recv(self):
-        return self.queue.get()
+    def __reconnect(self):
+        while True:
+            logger.info('mqtt connecting...')
+            with self.__reconn_cond:
+                self.__disconnect()
+                if self.connect():
+                    self.__reconn_cond.notify_all()
+                    logger.info('mqtt connect successfully.')
+                    break
+            utime.sleep(10)
 
-    def send(self, data):
+    def __disconnect(self):
         try:
-            if not self.cli.publish(self.publish_topic, data):
+            self.cli.disconnect()
+            self.cli = None
+        except Exception as e:
+            logger.error('mqtt disconnect failed: {}'.format(e))
+            return False
+        return True
+
+    def connect(self):
+        try:
+            self.cli = MQTTClient(*self.args, **self.kwargs)
+            self.cli.connect()
+        except Exception as e:
+            logger.error('mqtt connect failed. {}'.format(str(e)))
+            return False
+        else:
+            try:
+                self.cli.set_callback(self.__callback)
+                for topic in self.subscribe_topic.values():
+                    logger.info('subscribe topic: {}'.format(topic))
+                    self.cli.subscribe(topic, self.qos)
+            except Exception as e:
+                logger.error('mqtt subscribe failed. {}'.format(str(e)))
+                return False
+        return True
+
+    def listen(self):
+        self.__listen_thread.start()
+
+    def close(self):
+        self.__listen_thread.stop()
+        self.__reconn_thread.stop()
+        self.__disconnect()
+
+    def is_status_ok(self):
+        return self.cli.get_mqttsta() == 0
+
+    def send(self, topic_id, data):
+        try:
+            if not self.cli.publish(self.publish_topic[topic_id], data):
                 logger.error('publish failed.')
         except Exception as e:
             logger.error('publish failed with error: {}, prepare to check network.'.format(e))
+            with self.__reconn_cond:
+                self.__reconn_thread.start()
+
+    def recv(self):
+        return self.queue.get()

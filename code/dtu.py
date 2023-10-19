@@ -27,19 +27,7 @@ class DTU(object):
         cloud_type = self.config.get('system_config.cloud')
         if cloud_type == "mqtt":
             mqtt_config = self.config.get('mqtt_private_cloud_config')
-            cloud = MqttIot(
-                mqtt_config['client_id'],
-                mqtt_config['server'],
-                port=mqtt_config['port'],
-                user=mqtt_config['user'],
-                password=mqtt_config['password'],
-                keepalive=mqtt_config['keepalive'],
-                clean_session=mqtt_config['clean_session'],
-                qos=mqtt_config['qos'],
-                subscribe_topic=mqtt_config['subscribe'],
-                publish_topic=mqtt_config['publish'],
-                error_trans=True
-            )
+            cloud = MqttIot(**mqtt_config)
         elif cloud_type == "tcp":
             socket_config = self.config.get('socket_private_cloud_config')
             cloud = SocketIot(**socket_config)
@@ -80,6 +68,6 @@ class DTU(object):
                 data = self.serial.read(1024)
                 if data:
                     logger.info('up transfer msg: {}'.format(data))
-                    self.cloud.send(data)
+                    self.cloud.send('up', data)
             except Exception as e:
                 logger.error('up transfer error: {}'.format(e))

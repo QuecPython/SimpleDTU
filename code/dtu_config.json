@@ -1,6 +1,6 @@
 {
     "system_config": {
-        "cloud": "tcp"
+        "cloud": "mqtt"
     },
     "mqtt_private_cloud_config": {
         "server": "mq.tongxinmao.com",
@@ -11,8 +11,8 @@
         "clean_session": true,
         "qos": 0,
         "keepalive": 60,
-        "subscribe": "/public/TEST/down",
-        "publish": "/public/TEST/up"
+        "subscribe": {"down": "/public/TEST/down"},
+        "publish": {"up":  "/public/TEST/up"}
     },
     "socket_private_cloud_config": {
         "domain": "220.180.239.212",

@@ -96,7 +96,7 @@ class SocketIot(object):
                 self.queue.put({'data': data})
             except Exception as e:
                 if isinstance(e, OSError) and e.args[0] == 110:
-                    logger.debug('read timeout.')
+                    # logger.debug('read timeout.')
                     continue
                 logger.error('tcp recv error: {}'.format(e))
                 with self.__reconn_cond:
@@ -107,14 +107,14 @@ class SocketIot(object):
         while True:
             logger.info('connecting...')
             with self.__reconn_cond:
-                self.disconnect()
+                self.__disconnect()
                 if self.connect():
                     self.__reconn_cond.notify_all()
                     logger.info('connect successfully.')
                     break
             utime.sleep(10)
 
-    def disconnect(self):
+    def __disconnect(self):
         try:
             self.__sock.disconnect()
         except Exception as e:
@@ -132,6 +132,11 @@ class SocketIot(object):
 
     def listen(self):
         self.__listen_thread.start()
+
+    def close(self):
+        self.__listen_thread.stop()
+        self.__reconn_thread.stop()
+        self.__disconnect()
 
     def is_status_ok(self):
         return self.__sock.is_status_ok()
