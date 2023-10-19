@@ -1,162 +1,124 @@
-import usys
-import utime
-import _thread
 import usocket
-from usr import error
 from usr.logging import getLogger
-from usr.net_manager import NetManager
+from usr.threading import Queue, Thread
 
 
 logger = getLogger(__name__)
 
 
-class SocketIot(object):
-    """This class is tcp socket"""
-    RECONNECT_WAIT_SECONDS = 20
+class Socket(object):
 
-    def __init__(self, ip_type=None, protocol="TCP", keep_alive=None, domain=None, port=None, queue=None, error_trans=False):
-        super().__init__()
-        if protocol == "TCP" or protocol is None:
-            self.__protocol = "TCP"
-        else:
-            self.__protocol = "UDP"
-        if ip_type == "IPv6":
-            self.__ip_type = usocket.AF_INET6
-        else:
-            self.__ip_type = usocket.AF_INET
+    def __init__(self, host, port, timeout=5, keep_alive=None, protocol='TCP'):
+        self.__host = host
         self.__port = port
-        self.__domain = domain
-        self.__addr = None
-        self.__socket = None
-        self.__socket_args = []
-        self.__timeout = 50
+        self.__ip = None
+        self.__family = None
+        self.__domain = None
+        self.__timeout = timeout
         self.__keep_alive = keep_alive
-        self.__listen_thread_id = None
-        self.__init_addr()
-        self.__init_socket()
-        self.queue = queue
-        self.error_trans = error_trans
-
-    def __init_addr(self):
-        if self.__domain is not None:
-            if self.__port is None:
-                self.__port = 8883 if self.__domain.startswith("https://") else 1883
-            try:
-                addr_info = usocket.getaddrinfo(self.__domain, self.__port)
-                self.__ip = addr_info[0][-1][0]
-            except Exception as e:
-                usys.print_exception(e)
-                raise ValueError("Domain %s DNS parsing error. %s" % (self.__domain, str(e)))
-        self.__addr = (self.__ip, self.__port)
-
-    def __init_socket(self):
-        if self.__protocol == 'TCP':
-            socket_type = usocket.SOCK_STREAM
-            socket_proto = usocket.IPPROTO_TCP
-        elif self.__protocol == 'UDP':
-            socket_type = usocket.SOCK_DGRAM
-            socket_proto = usocket.IPPROTO_UDP
+        self.__sock = None
+        if protocol == 'TCP':
+            self.__sock_type = usocket.SOCK_STREAM
         else:
-            raise ValueError("Args method is TCP or UDP, not %s" % self.__protocol)
-        self.__socket_args = (self.__ip_type, socket_type, socket_proto)
+            self.__sock_type = usocket.SOCK_DGRAM
 
-    def __connect(self):
-        if self.__socket_args:
-            try:
-                self.__socket = usocket.socket(*self.__socket_args)
-                if self.__protocol == "TCP":
-                    self.__socket.connect(self.__addr)
+    def __str__(self):
+        if self.__sock is None:
+            return '<Socket Unbound>'
+        return '<{}({}:{})>'.format(
+            'TCP' if self.__sock_type == usocket.SOCK_STREAM else 'UDP',
+            self.__ip,
+            self.__port
+        )
+
+    def __init_args(self):
+        rv = usocket.getaddrinfo(self.__host, self.__port)
+        if not rv:
+            raise ValueError('DNS detect error for addr: {},{}.'.format(self.__host, self.__port))
+        self.__family = rv[0][0]
+        self.__domain = rv[0][3]
+        self.__ip, self.__port = rv[0][4]
+
+    def connect(self):
+        self.__init_args()
+        self.__sock = usocket.socket(self.__family, self.__sock_type)
+        if self.__sock_type == usocket.SOCK_STREAM:
+            self.__sock.connect((self.__ip, self.__port))
+            if self.__timeout and self.__timeout > 0:
+                self.__sock.settimeout(self.__timeout)
+            if self.__keep_alive and self.__keep_alive > 0:
+                self.__sock.setsockopt(usocket.SOL_SOCKET, usocket.TCP_KEEPALIVE, self.__keep_alive)
+
+    def disconnect(self):
+        if self.__sock:
+            self.__sock.close()
+            self.__sock = None
+
+    def is_status_ok(self):
+        if self.__sock:
+            if self.__sock_type == usocket.SOCK_STREAM:
+                return self.__sock.getsocketsta() == 4
+            else:
                 return True
-            except Exception as e:
-                usys.print_exception(e)
-                return False
-
         return False
+
+    def write(self, data):
+        if self.__sock_type == usocket.SOCK_STREAM:
+            flag = (self.__sock.send(data) == len(data))
+        else:
+            flag = (self.__sock.sendto(data, (self.__ip, self.__port)) == len(data))
+        return flag
+
+    def read(self, size=1024):
+        return self.__sock.recv(size)
+
+
+class SocketIot(object):
+
+    def __init__(
+            self,
+            domain=None,
+            port=None,
+            timeout=None,
+            keep_alive=None
+    ):
+        self.__sock = Socket(domain, port, timeout=timeout, keep_alive=keep_alive)
+        self.queue = Queue()
+        self.__recv_thread = Thread(target=self.recv_thread_worker)
 
     def recv_thread_worker(self):
         """Read data by socket."""
         while True:
             try:
-                data = self.__socket.recv(1024)
+                data = self.__sock.read(1024)
+                self.queue.put({'data': data})
             except Exception as e:
                 if isinstance(e, OSError) and e.args[0] == 110:
                     logger.debug('read timeout.')
                     continue
                 logger.error('tcp listen error: {}'.format(e))
-                self.put_error(error.ListenError())
-                self.__socket.close()
-                self.connect()
-                continue
-            else:
-                self.queue.put((None, data))
-            utime.sleep_ms(50)
-
-    def init(self):
-        self.connect()
-        self.listen()
-
-    def listen(self):
-        self.__listen_thread_id = _thread.start_new_thread(self.recv_thread_worker, ())
+                break
 
     def connect(self):
+        try:
+            self.__sock.connect()
+        except Exception as e:
+            logger.error('socket connect failed: {}'.format(e))
+        else:
+            self.__recv_thread.start()
 
-        while True:
-            # 检查注网和拨号
-            if not NetManager.check_and_reconnect():
-                logger.error('network status error.')
-                continue
+    def disconnect(self):
+        self.__recv_thread.stop()
+        self.__sock.disconnect()
 
-            if not self.__connect():
-                logger.error('tcp connect error.')
-                self.put_error(error.ConnectError())
-                utime.sleep(self.RECONNECT_WAIT_SECONDS)
-                continue
-
-            if self.__keep_alive != 0:
-                try:
-                    self.__socket.setsockopt(usocket.SOL_SOCKET, usocket.TCP_KEEPALIVE, self.__keep_alive)
-                except Exception as e:
-                    logger.error("socket option set error: {}".format(e))
-                    self.put_error(error.SetSocketOptError())
-                    self.__socket.close()
-                    continue
-
-            self.__socket.settimeout(self.__timeout)
-            logger.info('tcp connect successfully!')
-            break
-
-    def get_status(self):
-        _status = -1
-        if self.__socket is not None:
-            try:
-                if self.__protocol == "TCP":
-                    socket_sta = self.__socket.getsocketsta()
-                    if socket_sta in range(4):
-                        # Connecting
-                        _status = 1
-                    elif socket_sta == 4:
-                        # Connected
-                        _status = 0
-                    elif socket_sta in range(5, 11):
-                        # Disconnect
-                        _status = 2
-                elif self.__protocol == "UDP":
-                    _status = 0
-            except Exception as e:
-                usys.print_exception(e)
-        return _status
+    def is_status_ok(self):
+        return self.__sock.is_status_ok()
 
     def send(self, data):
         try:
-            self.__socket.write(data)
+            self.__sock.write(data)
         except Exception as e:
-            logger.error('tcp socket send error: {}, repare to check network.'.format(str(e)))
-            self.put_error(error.TCPSendError())
-            NetManager.check_and_reconnect()
+            logger.error('tcp socket send error: {}, prepare to check network.'.format(str(e)))
 
     def recv(self):
         return self.queue.get()
-
-    def put_error(self, e):
-        if self.error_trans:
-            self.queue.put((None, str(e)))

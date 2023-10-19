@@ -4,9 +4,9 @@ MQTT客户端抽象类
 import _thread
 import utime
 from umqtt import MQTTClient
-from usr import error
 from usr.logging import getLogger
 from usr.net_manager import NetManager
+from usr.threading import Queue
 
 logger = getLogger(__name__)
 
@@ -41,7 +41,7 @@ class MqttIot(object):
         self.qos = kwargs.pop('qos', 0)
         self.subscribe_topic = kwargs.pop('subscribe_topic', '/public/test')
         self.publish_topic = kwargs.pop('publish_topic', '/public/test')
-        self.queue = kwargs.pop('queue')
+        self.queue = Queue()
         self.error_trans = kwargs.pop('error_trans', False)
 
         kwargs.setdefault('reconn', False)  # 禁用内部重连机制
@@ -53,7 +53,7 @@ class MqttIot(object):
         self.listen()
 
     def callback(self, topic, data):
-        self.queue.put((topic, data))
+        self.queue.put({'topic': topic, 'data': data})
 
     def put_error(self, e):
         if self.error_trans:
@@ -62,29 +62,20 @@ class MqttIot(object):
     def connect(self):
 
         while True:
-            # 检查注网和拨号
-            if not NetManager.check_and_reconnect():
-                logger.error('network status error.')
-                continue
-
             # 重连
             try:
                 self.cli.connect()
             except Exception as e:
                 logger.error('mqtt connect failed. {}'.format(str(e)))
-                self.put_error(error.ConnectError())
                 utime.sleep(self.RECONNECT_WAIT_SECONDS)
                 continue
-
             # 订阅
             try:
                 self.cli.subscribe(self.subscribe_topic, self.qos)
             except Exception as e:
                 logger.error('mqtt subscribe failed. {}'.format(str(e)))
-                self.put_error(error.SubscribeError())
                 utime.sleep(self.RECONNECT_WAIT_SECONDS)
                 continue
-
             logger.info('mqtt connect successfully!')
             break
 
@@ -97,7 +88,6 @@ class MqttIot(object):
                 self.cli.wait_msg()
             except Exception as e:
                 logger.error('mqtt listen error continue to reconnect. {}'.format(str(e)))
-                self.put_error(error.ListenError())
                 self.cli.close()
                 self.connect()
 
@@ -108,7 +98,5 @@ class MqttIot(object):
         try:
             if not self.cli.publish(self.publish_topic, data):
                 logger.error('publish failed.')
-                self.put_error(error.PublishError())
         except Exception as e:
             logger.error('publish failed with error: {}, prepare to check network.'.format(e))
-            NetManager.check_and_reconnect()

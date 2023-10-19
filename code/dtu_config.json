@@ -15,9 +15,9 @@
         "publish": "/public/TEST/up"
     },
     "socket_private_cloud_config": {
-        "ip_type":"IPv4",
         "domain": "220.180.239.212",
         "port": "8305",
+        "timeout": 5,
         "keep_alive": 5
     },
     "uart_config": {
