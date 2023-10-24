@@ -1,4 +1,3 @@
-import utime
 from umqtt import MQTTClient
 from usr import network
 from usr.logging import getLogger
@@ -64,15 +63,14 @@ class MqttIot(object):
 
     def __reconnect(self):
         while True:
+            network.wait_network_ready()
             logger.info('mqtt connecting...')
             with self.__reconn_cond:
-                network.wait_network_ready()
                 self.__disconnect()
                 if self.connect():
                     self.__reconn_cond.notify_all()
                     logger.info('mqtt connect successfully.')
                     break
-            utime.sleep(10)
 
     def __disconnect(self):
         try:

@@ -39,28 +39,29 @@ def active_net_callback():
         logger.error('net check init failed: {}'.format(e))
 
 
-def wait_network_ready():
-    total = 0
-    while True:
-        logger.info('waiting network ready...')
-        code = checkNet.waitNetworkReady(30)
-        if code == (3, 1):
-            logger.info('network has been ready.')
-            break
-        logger.warn('network not ready, code: {}'.format(code))
-        total += 1
-        if 3 <= total < 6:
-            logger.info('make cfun swtich.')
-            cfun_switch()
-        if total >= 6:
-            logger.info('power restart.')
-            Power.powerRestart()
-
-
 def cfun_switch():
     net.setModemFun(0, 0)
     utime.sleep_ms(200)
     net.setModemFun(1, 0)
+
+
+def wait_network_ready():
+    total = 0
+    while True:
+        logger.info('check network ready...')
+        code = checkNet.waitNetworkReady(30)
+        if code == (3, 1):
+            logger.info('network has been ready.')
+            break
+        else:
+            logger.warn('network not ready, code: {}'.format(code))
+            if 3 <= total < 6:
+                logger.warn('make cfun switch.')
+                cfun_switch()
+            if total >= 6:
+                logger.warn('power restart.')
+                Power.powerRestart()
+        total += 1
 
 
 active_sim_hot_swap()
